@@ -74,8 +74,8 @@ export default function AssetFormModal({ asset, onClose }: Props) {
     if (isStock) {
       if (!symbol || !parseSymbol(symbol)) return false;
       if (!shares || parseFloat(shares) <= 0) return false;
-      // Must have manual price (auto-fetch is unreliable due to CORS)
-      if (!manualPrice || parseFloat(manualPrice) <= 0) return false;
+      // Manual price is optional - backend will auto-fetch if not provided
+      if (manualPrice && parseFloat(manualPrice) < 0) return false;
     } else {
       if (!amount || parseFloat(amount) <= 0) return false;
     }
@@ -88,7 +88,8 @@ export default function AssetFormModal({ asset, onClose }: Props) {
 
     if (isStock) {
       const parsed = parseSymbol(symbol)!;
-      const priceValue = parseFloat(manualPrice);
+      const priceValue = manualPrice ? parseFloat(manualPrice) : 0;
+      const hasManualPrice = manualPrice && parseFloat(manualPrice) > 0;
       
       const assetData: Omit<StockAsset, 'id' | 'createdAt' | 'updatedAt'> = {
         category: 'stock',
@@ -99,9 +100,9 @@ export default function AssetFormModal({ asset, onClose }: Props) {
         currency: parsed.currency,
         liquidity,
         note: note.trim() || undefined,
-        lastPrice: priceValue,
-        lastPriceAt: new Date().toISOString(),
-        pricingError: false,
+        lastPrice: hasManualPrice ? priceValue : undefined,
+        lastPriceAt: hasManualPrice ? new Date().toISOString() : undefined,
+        pricingError: !hasManualPrice,
       };
 
       if (isEditing) {
@@ -110,10 +111,12 @@ export default function AssetFormModal({ asset, onClose }: Props) {
         addAsset(assetData);
       }
       
-      // Also update the price store so it persists
-      updateStockPrice(parsed.symbol, priceValue, new Date().toISOString());
+      // If manual price was provided, update the price store
+      if (hasManualPrice) {
+        updateStockPrice(parsed.symbol, priceValue, new Date().toISOString());
+      }
       
-      // Fetch live price in background via backend proxy
+      // Always fetch live price in background via backend proxy
       fetchSingle(parsed.symbol).catch(() => {});
     } else {
       const assetData: Omit<CashAsset, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -239,12 +242,13 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
                     当前单价 ({currency})
+                    <span className="ml-1 text-[10px] text-muted-foreground/60">选填，留空自动获取</span>
                   </label>
                   <input
                     type="number"
                     value={manualPrice}
                     onChange={(e) => setManualPrice(e.target.value)}
-                    placeholder="如 450.00"
+                    placeholder="留空将自动获取最新价格"
                     min="0"
                     step="any"
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"

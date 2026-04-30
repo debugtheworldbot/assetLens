@@ -21,3 +21,4 @@
 - [x] Add manual price input field for stocks in form
 - [x] Test backend proxy API end-to-end
 - [x] Verify stock price auto-fetch works through backend
+- [x] Make manual price input optional for stocks (backend auto-fetches price)

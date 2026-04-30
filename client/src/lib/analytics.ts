@@ -145,25 +145,16 @@ export function getStockSummaries(
     items.push({ id: asset.id, name: asset.name, symbol: asset.symbol, value: val, color: asset.color });
   }
 
-  // Also add non-stock assets as a single "其他" entry
-  const nonStockAssets = assets.filter(a => a.category !== 'stock');
-  let nonStockTotal = 0;
-  for (const asset of nonStockAssets) {
-    nonStockTotal += getAssetValueInBaseCurrency(asset, baseCurrency, rates, priceCache);
-  }
-  if (nonStockTotal > 0) {
-    total += nonStockTotal;
-    items.push({ id: '__non_stock__', name: '其他资产', symbol: '', value: nonStockTotal });
-  }
-
-  return items.map((item, index) => ({
-    id: item.id,
-    name: item.name,
-    symbol: item.symbol,
-    value: item.value,
-    percentage: total > 0 ? (item.value / total) * 100 : 0,
-    color: item.color || STOCK_PALETTE[index % STOCK_PALETTE.length],
-  }));
+  return items
+    .sort((a, b) => b.value - a.value)
+    .map((item, index) => ({
+      id: item.id,
+      name: item.name,
+      symbol: item.symbol,
+      value: item.value,
+      percentage: total > 0 ? (item.value / total) * 100 : 0,
+      color: item.color || STOCK_PALETTE[index % STOCK_PALETTE.length],
+    }));
 }
 
 export function getRiskExposure(

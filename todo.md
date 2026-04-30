@@ -35,3 +35,5 @@
 - [x] Add tag-based pie chart on the statistics page (Home)
 - [x] Fix: BRK.B cannot parse stock quote (dot in ticker conflicts with market suffix)
 - [x] Add real-time crypto price fetching (BTC, ETH, etc.)
+- [x] 个股分布饼图按占比倒序排列
+- [x] 个股分布饼图移除「其他」，全部股票都展示出来

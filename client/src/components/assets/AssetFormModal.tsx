@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Plus, Loader2, Check, AlertCircle, Trash2, Search, ChevronDown } from 'lucide-react';
 import { useAssetStore } from '@/store/useAssetStore';
 import { usePriceStore } from '@/store/usePriceStore';
-import { Asset, Category, Currency, Liquidity, Market, StockAsset, CashAsset } from '@/lib/types';
+import { Asset, Category, Currency, Liquidity, Market, StockAsset, CashAsset, CryptoAsset } from '@/lib/types';
 import { CATEGORIES, getDefaultLiquidity } from '@/lib/categories';
 import { CURRENCIES } from '@/lib/currencies';
 import { parseSymbol, getMarketLabel } from '@/lib/stockPrice';
@@ -65,11 +65,23 @@ export default function AssetFormModal({ asset, onClose }: Props) {
   const updateStockPrice = useAssetStore((s) => s.updateStockPrice);
   const settings = useAssetStore((s) => s.settings);
   const fetchSingle = usePriceStore((s) => s.fetchSingle);
+  const fetchCryptoSingle = usePriceStore((s) => s.fetchCryptoSingle);
 
   const [category, setCategory] = useState<Category>(asset?.category || 'cash');
   const [name, setName] = useState(asset?.name || '');
   const [liquidity, setLiquidity] = useState<Liquidity>(asset?.liquidity || 'high');
   const [note, setNote] = useState(asset?.note || '');
+
+  // Crypto fields
+  const [cryptoSymbol, setCryptoSymbol] = useState<string>(
+    asset?.category === 'crypto' ? (asset as CryptoAsset).symbol : ''
+  );
+  const [cryptoPrice, setCryptoPrice] = useState<number | null>(
+    asset?.category === 'crypto' ? (asset as CryptoAsset).lastPrice || null : null
+  );
+  const [cryptoPriceLoading, setCryptoPriceLoading] = useState(false);
+  const [cryptoPriceError, setCryptoPriceError] = useState<string | null>(null);
+  const cryptoTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Cash fields
   const [amount, setAmount] = useState<string>(
@@ -333,9 +345,15 @@ export default function AssetFormModal({ asset, onClose }: Props) {
     );
   };
 
+  const isCrypto = category === 'crypto';
+
   const canSubmit = () => {
     if (isStock) {
       return canSubmitStock();
+    } else if (isCrypto) {
+      if (!cryptoSymbol.trim()) return false;
+      if (!amount || parseFloat(amount) <= 0) return false;
+      return true;
     } else {
       if (!name.trim()) return false;
       if (!amount || parseFloat(amount) <= 0) return false;
@@ -385,9 +403,34 @@ export default function AssetFormModal({ asset, onClose }: Props) {
           fetchSingle(fullSymbol).catch(() => {});
         }
       }
+    } else if (category === 'crypto') {
+      // Crypto asset with symbol for live pricing
+      const sym = cryptoSymbol.trim().toUpperCase();
+      const assetData = {
+        category: 'crypto' as const,
+        name: name.trim() || sym,
+        symbol: sym,
+        amount: parseFloat(amount),
+        currency: 'USD' as const,
+        liquidity,
+        note: note.trim() || undefined,
+        lastPrice: cryptoPrice || undefined,
+        lastPriceAt: cryptoPrice ? new Date().toISOString() : undefined,
+      };
+
+      if (isEditing) {
+        updateAsset(asset!.id, assetData);
+      } else {
+        addAsset(assetData);
+      }
+
+      // Fetch price in background if not yet fetched
+      if (!cryptoPrice) {
+        fetchCryptoSingle(sym).catch(() => {});
+      }
     } else {
       const assetData: Omit<CashAsset, 'id' | 'createdAt' | 'updatedAt'> = {
-        category,
+        category: category as Exclude<typeof category, 'stock' | 'crypto'>,
         name: name.trim(),
         amount: parseFloat(amount),
         currency,
@@ -676,9 +719,143 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                 />
               </div>
             </>
+          ) : isCrypto ? (
+            <>
+              {/* Crypto symbol input */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">币种符号</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={cryptoSymbol}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setCryptoSymbol(val);
+                      setCryptoPriceError(null);
+                      // Debounce auto-fetch
+                      if (cryptoTimer.current) clearTimeout(cryptoTimer.current);
+                      if (val.trim().length >= 2) {
+                        setCryptoPriceLoading(true);
+                        cryptoTimer.current = setTimeout(async () => {
+                          try {
+                            const input = JSON.stringify({ json: { symbols: [val.trim()] } });
+                            const res = await fetch(`/api/trpc/market.getCryptoPrices?input=${encodeURIComponent(input)}`, { credentials: 'include' });
+                            const json = await res.json();
+                            const data = json?.result?.data?.json;
+                            if (data?.prices?.[val.trim()]) {
+                              setCryptoPrice(data.prices[val.trim()].price);
+                              setCryptoPriceError(null);
+                            } else if (data?.errors?.[val.trim()]) {
+                              setCryptoPrice(null);
+                              setCryptoPriceError(data.errors[val.trim()]);
+                            } else {
+                              setCryptoPrice(null);
+                              setCryptoPriceError('未找到该币种');
+                            }
+                          } catch {
+                            setCryptoPrice(null);
+                            setCryptoPriceError('网络错误');
+                          } finally {
+                            setCryptoPriceLoading(false);
+                          }
+                        }, 600);
+                      } else {
+                        setCryptoPrice(null);
+                        setCryptoPriceLoading(false);
+                      }
+                    }}
+                    placeholder="BTC / ETH / SOL / DOGE ..."
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                  />
+                  {cryptoPriceLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {/* Price display */}
+                {cryptoPrice !== null && (
+                  <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sage-green/5 border border-sage-green/20">
+                    <Check className="w-3.5 h-3.5 text-sage-green flex-shrink-0" />
+                    <span className="text-xs text-sage-green font-medium">
+                      {cryptoSymbol} · USD {cryptoPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+                {cryptoPriceError && (
+                  <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-destructive/5">
+                    <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                    <span className="text-xs text-destructive">{cryptoPriceError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Name (optional, defaults to symbol) */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">名称（可选）</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={cryptoSymbol ? `默认: ${cryptoSymbol}` : '如：比特币'}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                />
+              </div>
+
+              {/* Amount (number of coins) */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">持有数量</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.5"
+                  min="0"
+                  step="any"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                />
+                {cryptoPrice && amount && parseFloat(amount) > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    市值 ≈ USD {(cryptoPrice * parseFloat(amount)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  </div>
+                )}
+              </div>
+
+              {/* Liquidity */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">流动性</label>
+                <div className="flex gap-2">
+                  {(['high', 'medium', 'low'] as Liquidity[]).map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => setLiquidity(l)}
+                      className={cn(
+                        'flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors',
+                        liquidity === l
+                          ? 'bg-sage-green/10 border-sage-green text-sage-green'
+                          : 'border-border text-muted-foreground hover:bg-accent'
+                      )}
+                    >
+                      {l === 'high' ? '高' : l === 'medium' ? '中' : '低'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">备注（可选）</label>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="补充说明..."
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                />
+              </div>
+            </>
           ) : (
             <>
-              {/* Name for non-stock */}
+              {/* Name for other categories */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">名称</label>
                 <input

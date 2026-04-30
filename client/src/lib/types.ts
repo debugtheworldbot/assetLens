@@ -36,13 +36,23 @@ export interface StockAsset extends BaseAsset {
   color?: string;
 }
 
+export interface CryptoAsset extends BaseAsset {
+  category: 'crypto';
+  symbol: string; // e.g. BTC, ETH, SOL
+  amount: number; // number of coins
+  currency: 'USD'; // crypto priced in USD
+  lastPrice?: number;
+  lastPriceAt?: string;
+  pricingError?: boolean;
+}
+
 export interface CashAsset extends BaseAsset {
-  category: Exclude<Category, 'stock'>;
+  category: Exclude<Category, 'stock' | 'crypto'>;
   amount: number;
   currency: Currency;
 }
 
-export type Asset = StockAsset | CashAsset;
+export type Asset = StockAsset | CryptoAsset | CashAsset;
 
 export interface Settings {
   riskLevel: 1 | 2 | 3 | 4 | 5;

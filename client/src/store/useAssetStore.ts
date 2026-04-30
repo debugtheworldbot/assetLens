@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import { AppState, Asset, Settings, Currency, StockAsset, CashAsset, Category, Liquidity, Market } from '../lib/types';
+import { AppState, Asset, Settings, Currency, StockAsset, CashAsset, CryptoAsset, Category, Liquidity, Market } from '../lib/types';
 
 interface AssetStore {
   version: 1;
@@ -17,6 +17,7 @@ interface AssetStore {
   getExportState: () => AppState;
   clearAll: () => void;
   updateStockPrice: (symbol: string, price: number, asOf: string) => void;
+  updateCryptoPrice: (symbol: string, price: number, asOf: string) => void;
   updateAssetTags: (id: string, tags: string[]) => void;
   updateAssetColor: (id: string, color: string) => void;
 }
@@ -101,6 +102,23 @@ export const useAssetStore = create<AssetStore>()(
         set((state) => ({
           assets: state.assets.map((a) => {
             if (a.category === 'stock' && (a as StockAsset).symbol === symbol) {
+              return {
+                ...a,
+                lastPrice: price,
+                lastPriceAt: asOf,
+                pricingError: false,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return a;
+          }) as Asset[],
+        }));
+      },
+
+      updateCryptoPrice: (symbol, price, asOf) => {
+        set((state) => ({
+          assets: state.assets.map((a) => {
+            if (a.category === 'crypto' && (a as CryptoAsset).symbol === symbol) {
               return {
                 ...a,
                 lastPrice: price,

@@ -9,16 +9,31 @@ import { fuzzySearchStocks, type MarketType } from "../stockList";
  *
  * Shanghai (.SS): 6xxxxx (stocks), 5xxxxx (ETFs/funds), 9xxxxx (B shares)
  * Shenzhen (.SZ): 0xxxxx, 3xxxxx (ChiNext), 1xxxxx (bonds/ETFs), 2xxxxx (B shares)
+ *
+ * Special cases:
+ * - US tickers with dots (BRK.B) -> convert to hyphen (BRK-B)
+ * - Crypto symbols (BTC.CRYPTO) -> convert to BTC-USD
  */
 function toYahooSymbol(symbol: string): string {
-  const match = symbol.trim().toUpperCase().match(/^([A-Z0-9]+)\.(US|HK|CN)$/);
-  if (!match) return symbol;
+  const upper = symbol.trim().toUpperCase();
 
-  const [, ticker, market] = match;
+  // Handle crypto: BTC.CRYPTO -> BTC-USD
+  const cryptoMatch = upper.match(/^([A-Z]+)\.CRYPTO$/);
+  if (cryptoMatch) {
+    return `${cryptoMatch[1]}-USD`;
+  }
+
+  // Match market suffix - use greedy match for last occurrence of .US/.HK/.CN
+  // This handles tickers with dots like BRK.B.US
+  const marketMatch = upper.match(/^(.+)\.(US|HK|CN)$/);
+  if (!marketMatch) return symbol;
+
+  const [, ticker, market] = marketMatch;
 
   switch (market) {
     case "US":
-      return ticker;
+      // Replace dots in ticker with hyphens for Yahoo Finance (BRK.B -> BRK-B)
+      return ticker.replace(/\./g, "-");
     case "HK": {
       const hkTicker = ticker.replace(/^0+/, "") || "0";
       return `${hkTicker.padStart(4, "0")}.HK`;
@@ -210,6 +225,42 @@ export const marketRouter = router({
         input.limit
       );
       return { results };
+    }),
+
+  /**
+   * Get crypto prices (BTC, ETH, etc.)
+   * Uses Yahoo Finance format: BTC-USD, ETH-USD
+   */
+  getCryptoPrices: publicProcedure
+    .input(
+      z.object({
+        symbols: z.array(z.string()).min(1).max(20),
+      })
+    )
+    .query(async ({ input }) => {
+      const results: Record<string, { price: number; asOf: string; name?: string }> = {};
+      const errors: Record<string, string> = {};
+
+      const fetchPromises = input.symbols.map(async (symbol) => {
+        // Convert to our internal format: BTC -> BTC.CRYPTO
+        const internalSymbol = `${symbol.toUpperCase()}.CRYPTO`;
+        const result = await fetchFromDataApi(internalSymbol);
+
+        const key = symbol.toUpperCase();
+        if (result.price !== null && result.asOf) {
+          results[key] = {
+            price: result.price,
+            asOf: result.asOf,
+            name: result.name || undefined,
+          };
+        } else {
+          errors[key] = result.error || "获取失败";
+        }
+      });
+
+      await Promise.allSettled(fetchPromises);
+
+      return { prices: results, errors, fetchedAt: new Date().toISOString() };
     }),
 
   /**

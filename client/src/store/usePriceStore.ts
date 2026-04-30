@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { PriceCache } from '../lib/types';
+import { PriceCache, CryptoAsset } from '../lib/types';
 import { useAssetStore } from './useAssetStore';
 
 interface PriceStore {
@@ -11,6 +11,7 @@ interface PriceStore {
   loading: boolean;
   refresh: () => Promise<void>;
   fetchSingle: (symbol: string) => Promise<void>;
+  fetchCryptoSingle: (symbol: string) => Promise<void>;
 }
 
 /**
@@ -24,7 +25,6 @@ async function fetchPricesFromBackend(symbols: string[]): Promise<{
   errors: Record<string, string>;
 }> {
   try {
-    // tRPC superjson format: input must be { json: { symbols: [...] } }
     const input = JSON.stringify({ json: { symbols } });
     const res = await fetch(`/api/trpc/market.getStockPrices?input=${encodeURIComponent(input)}`, {
       credentials: 'include',
@@ -37,7 +37,43 @@ async function fetchPricesFromBackend(symbols: string[]): Promise<{
     }
     
     const json = await res.json();
-    // tRPC superjson response: { result: { data: { json: { prices, errors, fetchedAt } } } }
+    const data = json?.result?.data?.json;
+    
+    if (!data) {
+      const errorMap: Record<string, string> = {};
+      symbols.forEach(s => { errorMap[s.toUpperCase()] = '响应格式错误'; });
+      return { prices: {}, errors: errorMap };
+    }
+    
+    return { prices: data.prices || {}, errors: data.errors || {} };
+  } catch (err: any) {
+    const errorMap: Record<string, string> = {};
+    symbols.forEach(s => { errorMap[s.toUpperCase()] = err.message || '网络错误'; });
+    return { prices: {}, errors: errorMap };
+  }
+}
+
+/**
+ * Fetch crypto prices through the backend proxy API
+ * Symbols are bare crypto names: BTC, ETH, SOL, etc.
+ */
+async function fetchCryptoPricesFromBackend(symbols: string[]): Promise<{
+  prices: Record<string, { price: number; asOf: string }>;
+  errors: Record<string, string>;
+}> {
+  try {
+    const input = JSON.stringify({ json: { symbols } });
+    const res = await fetch(`/api/trpc/market.getCryptoPrices?input=${encodeURIComponent(input)}`, {
+      credentials: 'include',
+    });
+    
+    if (!res.ok) {
+      const errorMap: Record<string, string> = {};
+      symbols.forEach(s => { errorMap[s.toUpperCase()] = `HTTP ${res.status}`; });
+      return { prices: {}, errors: errorMap };
+    }
+    
+    const json = await res.json();
     const data = json?.result?.data?.json;
     
     if (!data) {
@@ -65,33 +101,55 @@ export const usePriceStore = create<PriceStore>()(
 
       refresh: async () => {
         const assets = useAssetStore.getState().assets;
+        
+        // Collect stock symbols
         const stockSymbols = assets
           .filter(a => a.category === 'stock')
           .map(a => (a as any).symbol as string);
 
-        if (stockSymbols.length === 0) {
+        // Collect crypto symbols
+        const cryptoSymbols = assets
+          .filter(a => a.category === 'crypto')
+          .map(a => (a as CryptoAsset).symbol);
+
+        if (stockSymbols.length === 0 && cryptoSymbols.length === 0) {
           set({ status: 'fresh', loading: false });
           return;
         }
 
         set({ loading: true });
-        const result = await fetchPricesFromBackend(stockSymbols);
-        const now = new Date().toISOString();
 
+        // Fetch both in parallel
+        const [stockResult, cryptoResult] = await Promise.all([
+          stockSymbols.length > 0 ? fetchPricesFromBackend(stockSymbols) : { prices: {}, errors: {} },
+          cryptoSymbols.length > 0 ? fetchCryptoPricesFromBackend(cryptoSymbols) : { prices: {}, errors: {} },
+        ]);
+
+        const now = new Date().toISOString();
         const existingPrices = get().prices;
-        const newPrices = { ...existingPrices, ...result.prices };
+        const newPrices = { ...existingPrices, ...stockResult.prices, ...cryptoResult.prices };
+        const allErrors = { ...stockResult.errors, ...cryptoResult.errors };
 
         set({
           prices: newPrices,
           fetchedAt: now,
           status: 'fresh',
-          errors: result.errors,
+          errors: allErrors,
           loading: false,
         });
 
+        // Update stock prices in asset store
         const updateStockPrice = useAssetStore.getState().updateStockPrice;
-        for (const [symbol, data] of Object.entries(result.prices)) {
+        for (const [symbol, data] of Object.entries(stockResult.prices)) {
           updateStockPrice(symbol, data.price, data.asOf);
+        }
+
+        // Update crypto prices in asset store
+        const updateCryptoPrice = useAssetStore.getState().updateCryptoPrice;
+        if (updateCryptoPrice) {
+          for (const [symbol, data] of Object.entries(cryptoResult.prices)) {
+            updateCryptoPrice(symbol, data.price, data.asOf);
+          }
         }
       },
 
@@ -114,6 +172,32 @@ export const usePriceStore = create<PriceStore>()(
         if (result.prices[symbol.toUpperCase()]) {
           const data = result.prices[symbol.toUpperCase()];
           useAssetStore.getState().updateStockPrice(symbol.toUpperCase(), data.price, data.asOf);
+        }
+      },
+
+      fetchCryptoSingle: async (symbol: string) => {
+        set({ loading: true });
+        const result = await fetchCryptoPricesFromBackend([symbol]);
+        const now = new Date().toISOString();
+
+        const existingPrices = get().prices;
+        const existingErrors = get().errors;
+        
+        set({
+          prices: { ...existingPrices, ...result.prices },
+          fetchedAt: now,
+          status: 'fresh',
+          errors: { ...existingErrors, ...result.errors },
+          loading: false,
+        });
+
+        const key = symbol.toUpperCase();
+        if (result.prices[key]) {
+          const data = result.prices[key];
+          const updateCryptoPrice = useAssetStore.getState().updateCryptoPrice;
+          if (updateCryptoPrice) {
+            updateCryptoPrice(key, data.price, data.asOf);
+          }
         }
       },
     }),

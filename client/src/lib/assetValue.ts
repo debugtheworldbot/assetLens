@@ -1,4 +1,4 @@
-import { Asset, Currency, PriceCache, StockAsset } from './types';
+import { Asset, Currency, PriceCache, StockAsset, CryptoAsset } from './types';
 import { convert } from './fx';
 
 export function getAssetValueInOriginalCurrency(asset: Asset, priceCache: PriceCache): number {
@@ -9,7 +9,15 @@ export function getAssetValueInOriginalCurrency(asset: Asset, priceCache: PriceC
     const price = live ?? fallback ?? 0;
     return stockAsset.shares * price;
   }
-  return asset.amount;
+  if (asset.category === 'crypto') {
+    const cryptoAsset = asset as CryptoAsset;
+    // Price cache key for crypto: e.g. "BTC"
+    const live = priceCache.prices[cryptoAsset.symbol]?.price;
+    const fallback = cryptoAsset.lastPrice;
+    const price = live ?? fallback ?? 0;
+    return cryptoAsset.amount * price;
+  }
+  return (asset as any).amount;
 }
 
 export function getAssetValueInBaseCurrency(

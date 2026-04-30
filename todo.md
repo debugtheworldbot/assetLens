@@ -33,3 +33,5 @@
 - [x] Each stock shows a unique color in statistics/charts
 - [x] Support adding custom tags to each stock asset
 - [x] Add tag-based pie chart on the statistics page (Home)
+- [x] Fix: BRK.B cannot parse stock quote (dot in ticker conflicts with market suffix)
+- [x] Add real-time crypto price fetching (BTC, ETH, etc.)

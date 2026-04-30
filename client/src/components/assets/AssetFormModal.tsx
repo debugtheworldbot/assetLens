@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { X, Plus, Loader2, Check, AlertCircle, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Plus, Loader2, Check, AlertCircle, Trash2, Search, ChevronDown } from 'lucide-react';
 import { useAssetStore } from '@/store/useAssetStore';
 import { usePriceStore } from '@/store/usePriceStore';
 import { Asset, Category, Currency, Liquidity, Market, StockAsset, CashAsset } from '@/lib/types';
@@ -15,20 +15,31 @@ interface Props {
 
 // Market options for the dropdown
 const MARKETS: { value: Market; label: string; suffix: string; placeholder: string; currency: Currency }[] = [
-  { value: 'CN', label: 'A股', suffix: '.CN', placeholder: '如 600519、000001', currency: 'CNY' },
-  { value: 'HK', label: '港股', suffix: '.HK', placeholder: '如 00700、09988', currency: 'HKD' },
-  { value: 'US', label: '美股', suffix: '.US', placeholder: '如 AAPL、TSLA', currency: 'USD' },
+  { value: 'CN', label: 'A股', suffix: '.CN', placeholder: '输入代码或名称搜索...', currency: 'CNY' },
+  { value: 'HK', label: '港股', suffix: '.HK', placeholder: '输入代码或名称搜索...', currency: 'HKD' },
+  { value: 'US', label: '美股', suffix: '.US', placeholder: '输入代码或名称搜索...', currency: 'USD' },
 ];
+
+interface SearchResult {
+  ticker: string;
+  name: string;
+  nameEn?: string;
+}
 
 interface StockEntry {
   id: string;
   name: string;
   ticker: string; // raw ticker without market suffix
   shares: string;
-  priceStatus: 'idle' | 'loading' | 'success' | 'error';
+  searchStatus: 'idle' | 'searching' | 'found' | 'not_found' | 'error';
   price: number | null;
   priceAsOf: string | null;
   error: string | null;
+  // Search dropdown state
+  searchQuery: string;
+  searchResults: SearchResult[];
+  showDropdown: boolean;
+  isSearching: boolean;
 }
 
 function createEmptyEntry(): StockEntry {
@@ -37,10 +48,14 @@ function createEmptyEntry(): StockEntry {
     name: '',
     ticker: '',
     shares: '',
-    priceStatus: 'idle',
+    searchStatus: 'idle',
     price: null,
     priceAsOf: null,
     error: null,
+    searchQuery: '',
+    searchResults: [],
+    showDropdown: false,
+    isSearching: false,
   };
 }
 
@@ -75,10 +90,14 @@ export default function AssetFormModal({ asset, onClose }: Props) {
         name: sa.name,
         ticker,
         shares: String(sa.shares),
-        priceStatus: sa.lastPrice ? 'success' : 'idle',
+        searchStatus: sa.lastPrice ? 'found' : 'idle',
         price: sa.lastPrice || null,
         priceAsOf: sa.lastPriceAt || null,
         error: null,
+        searchQuery: ticker,
+        searchResults: [],
+        showDropdown: false,
+        isSearching: false,
       }];
     }
     return [createEmptyEntry()];
@@ -89,68 +108,209 @@ export default function AssetFormModal({ asset, onClose }: Props) {
 
   const marketInfo = MARKETS.find(m => m.value === market)!;
 
+  // Debounce timers for fuzzy search
+  const searchTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  // Ref for dropdown click-outside handling
+  const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
   useEffect(() => {
     if (!isEditing) {
       setLiquidity(getDefaultLiquidity(category));
     }
   }, [category, isEditing]);
 
-  // Fetch price for a single entry immediately after ticker + shares are filled
-  const fetchPriceForEntry = useCallback(async (entryId: string, ticker: string) => {
-    const fullSymbol = `${ticker.toUpperCase()}.${market}`;
-    
-    setEntries(prev => prev.map(e => 
-      e.id === entryId ? { ...e, priceStatus: 'loading', error: null } : e
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(searchTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      setEntries(prev => prev.map(entry => {
+        const ref = dropdownRefs.current[entry.id];
+        if (ref && !ref.contains(e.target as Node)) {
+          return { ...entry, showDropdown: false };
+        }
+        return entry;
+      }));
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fuzzy search from backend
+  const doFuzzySearch = useCallback(async (entryId: string, query: string) => {
+    if (!query.trim() || query.trim().length < 1) {
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? { ...e, searchResults: [], showDropdown: false, isSearching: false } : e
+      ));
+      return;
+    }
+
+    setEntries(prev => prev.map(e =>
+      e.id === entryId ? { ...e, isSearching: true } : e
     ));
 
     try {
-      const input = JSON.stringify({ json: { symbols: [fullSymbol] } });
-      const res = await fetch(`/api/trpc/market.getStockPrices?input=${encodeURIComponent(input)}`, {
+      const input = JSON.stringify({ json: { query: query.trim(), market, limit: 8 } });
+      const res = await fetch(`/api/trpc/market.fuzzySearch?input=${encodeURIComponent(input)}`, {
         credentials: 'include',
       });
-      
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
+
+      const json = await res.json();
+      const results: SearchResult[] = json?.result?.data?.json?.results || [];
+
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? {
+          ...e,
+          searchResults: results,
+          showDropdown: results.length > 0,
+          isSearching: false,
+        } : e
+      ));
+    } catch {
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? { ...e, searchResults: [], showDropdown: false, isSearching: false } : e
+      ));
+    }
+  }, [market]);
+
+  // Fetch price for a specific ticker
+  const fetchPrice = useCallback(async (entryId: string, ticker: string) => {
+    setEntries(prev => prev.map(e =>
+      e.id === entryId ? { ...e, searchStatus: 'searching', error: null } : e
+    ));
+
+    try {
+      const input = JSON.stringify({ json: { ticker: ticker.trim(), market } });
+      const res = await fetch(`/api/trpc/market.searchStock?input=${encodeURIComponent(input)}`, {
+        credentials: 'include',
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const json = await res.json();
       const data = json?.result?.data?.json;
-      
-      if (data?.prices?.[fullSymbol]) {
-        const priceData = data.prices[fullSymbol];
-        setEntries(prev => prev.map(e => 
-          e.id === entryId ? { 
-            ...e, 
-            priceStatus: 'success', 
-            price: priceData.price, 
-            priceAsOf: priceData.asOf,
-            error: null 
+
+      if (data?.price !== null && data?.price !== undefined) {
+        setEntries(prev => prev.map(e =>
+          e.id === entryId ? {
+            ...e,
+            searchStatus: 'found',
+            name: e.name || data.name || '', // only auto-fill if name is empty
+            price: data.price,
+            priceAsOf: data.asOf,
+            error: null,
           } : e
         ));
-      } else if (data?.errors?.[fullSymbol]) {
-        setEntries(prev => prev.map(e => 
-          e.id === entryId ? { 
-            ...e, 
-            priceStatus: 'error', 
-            error: data.errors[fullSymbol] 
+      } else if (data?.error) {
+        setEntries(prev => prev.map(e =>
+          e.id === entryId ? {
+            ...e,
+            searchStatus: 'not_found',
+            error: data.error,
           } : e
         ));
       } else {
-        setEntries(prev => prev.map(e => 
-          e.id === entryId ? { ...e, priceStatus: 'error', error: '未找到报价' } : e
+        setEntries(prev => prev.map(e =>
+          e.id === entryId ? {
+            ...e,
+            searchStatus: 'not_found',
+            error: '未找到该股票',
+          } : e
         ));
       }
     } catch (err: any) {
-      setEntries(prev => prev.map(e => 
-        e.id === entryId ? { 
-          ...e, 
-          priceStatus: 'error', 
-          error: err.message || '获取失败' 
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? {
+          ...e,
+          searchStatus: 'error',
+          error: err.message || '获取价格失败',
         } : e
       ));
     }
   }, [market]);
 
+  // Handle search input change with debounced fuzzy search
+  const handleSearchInputChange = (entryId: string, value: string) => {
+    setEntries(prev => prev.map(e =>
+      e.id === entryId ? {
+        ...e,
+        searchQuery: value,
+        // Reset if user is typing again
+        ticker: '',
+        name: '',
+        searchStatus: 'idle',
+        price: null,
+        priceAsOf: null,
+        error: null,
+      } : e
+    ));
+
+    // Clear previous timer
+    if (searchTimers.current[entryId]) {
+      clearTimeout(searchTimers.current[entryId]);
+    }
+
+    // Debounce fuzzy search (300ms)
+    if (value.trim().length >= 1) {
+      searchTimers.current[entryId] = setTimeout(() => {
+        doFuzzySearch(entryId, value);
+      }, 300);
+    } else {
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? { ...e, searchResults: [], showDropdown: false } : e
+      ));
+    }
+  };
+
+  // Select a stock from dropdown
+  const handleSelectStock = (entryId: string, stock: SearchResult) => {
+    setEntries(prev => prev.map(e =>
+      e.id === entryId ? {
+        ...e,
+        ticker: stock.ticker,
+        name: stock.name,
+        searchQuery: `${stock.ticker} ${stock.name}`,
+        showDropdown: false,
+        searchResults: [],
+      } : e
+    ));
+
+    // Immediately fetch price
+    fetchPrice(entryId, stock.ticker);
+  };
+
+  // Handle direct ticker input (user types exact code and presses Enter or blurs)
+  const handleDirectSearch = (entryId: string) => {
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry) return;
+
+    // If already found or no query, skip
+    if (entry.searchStatus === 'found') return;
+    if (!entry.searchQuery.trim()) return;
+
+    // If no ticker selected from dropdown, treat the query as a ticker code
+    if (!entry.ticker) {
+      const query = entry.searchQuery.trim().toUpperCase();
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? {
+          ...e,
+          ticker: query,
+          showDropdown: false,
+        } : e
+      ));
+      fetchPrice(entryId, query);
+    }
+  };
+
   const updateEntry = (id: string, field: keyof StockEntry, value: string) => {
-    setEntries(prev => prev.map(e => 
+    setEntries(prev => prev.map(e =>
       e.id === id ? { ...e, [field]: value } : e
     ));
   };
@@ -164,28 +324,10 @@ export default function AssetFormModal({ asset, onClose }: Props) {
     setEntries(prev => [...prev, createEmptyEntry()]);
   };
 
-  // Handle "confirm" for a single stock entry - fetches price immediately
-  const confirmEntry = (id: string) => {
-    const entry = entries.find(e => e.id === id);
-    if (!entry || !entry.ticker.trim()) return;
-    fetchPriceForEntry(id, entry.ticker.trim());
-  };
-
-  // Auto-fetch price when ticker input loses focus (blur)
-  const handleTickerBlur = (id: string) => {
-    const entry = entries.find(e => e.id === id);
-    if (!entry || !entry.ticker.trim()) return;
-    // Only auto-fetch if we haven't fetched yet
-    if (entry.priceStatus === 'idle' || entry.priceStatus === 'error') {
-      fetchPriceForEntry(id, entry.ticker.trim());
-    }
-  };
-
   const canSubmitStock = () => {
-    // At least one entry must have ticker and shares filled
-    return entries.some(e => 
-      e.ticker.trim() && 
-      e.shares && 
+    return entries.some(e =>
+      e.ticker.trim() &&
+      e.shares &&
       parseFloat(e.shares) > 0 &&
       e.name.trim()
     );
@@ -206,14 +348,13 @@ export default function AssetFormModal({ asset, onClose }: Props) {
     if (!canSubmit()) return;
 
     if (isStock) {
-      // Add all valid entries as separate assets
-      const validEntries = entries.filter(e => 
+      const validEntries = entries.filter(e =>
         e.ticker.trim() && e.shares && parseFloat(e.shares) > 0 && e.name.trim()
       );
 
       for (const entry of validEntries) {
         const fullSymbol = `${entry.ticker.toUpperCase()}.${market}`;
-        
+
         const assetData: Omit<StockAsset, 'id' | 'createdAt' | 'updatedAt'> = {
           category: 'stock',
           name: entry.name.trim(),
@@ -225,7 +366,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
           note: note.trim() || undefined,
           lastPrice: entry.price || undefined,
           lastPriceAt: entry.priceAsOf || undefined,
-          pricingError: entry.priceStatus !== 'success',
+          pricingError: entry.searchStatus !== 'found',
         };
 
         if (isEditing && validEntries.length === 1) {
@@ -240,7 +381,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
         }
 
         // If price wasn't fetched yet, fetch in background
-        if (entry.priceStatus !== 'success') {
+        if (entry.searchStatus !== 'found') {
           fetchSingle(fullSymbol).catch(() => {});
         }
       }
@@ -306,7 +447,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
             </div>
           </div>
 
-          {/* Stock fields - new multi-stock UI */}
+          {/* Stock fields - multi-stock UI with fuzzy search */}
           {isStock ? (
             <>
               {/* Market dropdown */}
@@ -316,15 +457,8 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                   value={market}
                   onChange={(e) => {
                     setMarket(e.target.value as Market);
-                    // Reset entries when market changes (prices are market-specific)
                     if (!isEditing) {
-                      setEntries(prev => prev.map(entry => ({
-                        ...entry,
-                        priceStatus: 'idle' as const,
-                        price: null,
-                        priceAsOf: null,
-                        error: null,
-                      })));
+                      setEntries([createEmptyEntry()]);
                     }
                   }}
                   disabled={isEditing}
@@ -342,24 +476,78 @@ export default function AssetFormModal({ asset, onClose }: Props) {
               <div className="space-y-3">
                 <label className="text-xs font-medium text-muted-foreground block">
                   股票列表
-                  {!isEditing && (
-                    <span className="ml-1 text-[10px] text-muted-foreground/60">
-                      添加后自动获取价格
-                    </span>
-                  )}
                 </label>
 
                 {entries.map((entry, idx) => (
                   <div key={entry.id} className="rounded-xl border border-border bg-accent/30 p-3 space-y-2">
-                    {/* Row 1: Name + Remove */}
+                    {/* Row 1: Search input with dropdown */}
                     <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={entry.name}
-                        onChange={(e) => updateEntry(entry.id, 'name', e.target.value)}
-                        placeholder="名称（如：贵州茅台）"
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                      />
+                      <div
+                        ref={(el) => { dropdownRefs.current[entry.id] = el; }}
+                        className="relative flex-1"
+                      >
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={entry.searchQuery}
+                          onChange={(e) => handleSearchInputChange(entry.id, e.target.value)}
+                          onFocus={() => {
+                            if (entry.searchResults.length > 0) {
+                              setEntries(prev => prev.map(e =>
+                                e.id === entry.id ? { ...e, showDropdown: true } : e
+                              ));
+                            }
+                          }}
+                          onBlur={() => {
+                            // Delay to allow click on dropdown item
+                            setTimeout(() => handleDirectSearch(entry.id), 200);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleDirectSearch(entry.id);
+                            }
+                          }}
+                          placeholder={marketInfo.placeholder}
+                          className="w-full pl-8 pr-12 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">
+                          {entry.isSearching ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            marketInfo.suffix
+                          )}
+                        </span>
+
+                        {/* Fuzzy search dropdown */}
+                        {entry.showDropdown && entry.searchResults.length > 0 && (
+                          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {entry.searchResults.map((result) => (
+                              <button
+                                key={result.ticker}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); // prevent blur
+                                  handleSelectStock(entry.id, result);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center gap-2 border-b border-border/50 last:border-0"
+                              >
+                                <span className="text-xs font-mono font-semibold text-warm-orange min-w-[60px]">
+                                  {result.ticker}
+                                </span>
+                                <span className="text-sm text-foreground truncate flex-1">
+                                  {result.name}
+                                </span>
+                                {result.nameEn && (
+                                  <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
+                                    {result.nameEn}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       {entries.length > 1 && (
                         <button
                           type="button"
@@ -371,21 +559,63 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                       )}
                     </div>
 
-                    {/* Row 2: Ticker + Shares + Fetch button */}
-                    <div className="flex gap-2 items-center">
-                      <div className="relative flex-1">
-                        <input
-                          type="text"
-                          value={entry.ticker}
-                          onChange={(e) => updateEntry(entry.id, 'ticker', e.target.value.toUpperCase())}
-                          onBlur={() => handleTickerBlur(entry.id)}
-                          placeholder={marketInfo.placeholder}
-                          className="w-full px-3 py-1.5 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-warm-orange/30 pr-12"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">
-                          {marketInfo.suffix}
-                        </span>
+                    {/* Search status indicator */}
+                    {entry.searchStatus === 'searching' && (
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted/50">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">正在获取 {entry.ticker}{marketInfo.suffix} 的价格...</span>
                       </div>
+                    )}
+
+                    {/* Found result - show name + price */}
+                    {entry.searchStatus === 'found' && (
+                      <div className="rounded-lg bg-sage-green/5 border border-sage-green/20 p-2 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-sage-green flex-shrink-0" />
+                          <span className="text-xs font-medium text-foreground truncate">
+                            {entry.ticker}{marketInfo.suffix} · {entry.name}
+                          </span>
+                          <span className="text-xs text-sage-green font-mono ml-auto flex-shrink-0">
+                            {marketInfo.currency} {entry.price?.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {entry.shares && parseFloat(entry.shares) > 0 && entry.price && (
+                          <div className="text-[11px] text-muted-foreground pl-5">
+                            市值 ≈ {marketInfo.currency} {(entry.price * parseFloat(entry.shares)).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Not found / error */}
+                    {(entry.searchStatus === 'not_found' || entry.searchStatus === 'error') && (
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-destructive/5">
+                        <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                        <span className="text-xs text-destructive">{entry.error || '未找到该股票'}</span>
+                        <button
+                          type="button"
+                          onClick={() => fetchPrice(entry.id, entry.ticker || entry.searchQuery)}
+                          className="ml-auto text-xs text-warm-orange hover:underline"
+                        >
+                          重试
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Row 2: Shares input (name is auto-filled from search) */}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={entry.name}
+                        onChange={(e) => updateEntry(entry.id, 'name', e.target.value)}
+                        placeholder="名称（选择后自动填充）"
+                        className={cn(
+                          "flex-1 px-3 py-1.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30",
+                          entry.searchStatus === 'found'
+                            ? 'border-sage-green/30 text-foreground'
+                            : 'border-border'
+                        )}
+                      />
                       <input
                         type="number"
                         value={entry.shares}
@@ -393,51 +623,9 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                         placeholder="股数"
                         min="0"
                         step="any"
-                        className="w-20 px-3 py-1.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                        className="w-24 px-3 py-1.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
                       />
-                      <button
-                        type="button"
-                        onClick={() => confirmEntry(entry.id)}
-                        disabled={!entry.ticker.trim() || entry.priceStatus === 'loading'}
-                        className={cn(
-                          'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border whitespace-nowrap',
-                          entry.priceStatus === 'success'
-                            ? 'bg-sage-green/10 border-sage-green text-sage-green'
-                            : entry.priceStatus === 'loading'
-                            ? 'bg-muted border-border text-muted-foreground'
-                            : 'bg-warm-orange/10 border-warm-orange text-warm-orange hover:bg-warm-orange/20'
-                        )}
-                      >
-                        {entry.priceStatus === 'loading' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : entry.priceStatus === 'success' ? (
-                          <Check className="w-3.5 h-3.5" />
-                        ) : (
-                          '获取'
-                        )}
-                      </button>
                     </div>
-
-                    {/* Price result */}
-                    {entry.priceStatus === 'success' && entry.price && (
-                      <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-sage-green/5">
-                        <Check className="w-3.5 h-3.5 text-sage-green" />
-                        <span className="text-xs text-sage-green font-medium font-mono">
-                          {marketInfo.currency} {entry.price.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
-                        </span>
-                        {entry.shares && parseFloat(entry.shares) > 0 && (
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            市值 ≈ {marketInfo.currency} {(entry.price * parseFloat(entry.shares)).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {entry.priceStatus === 'error' && (
-                      <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-destructive/5">
-                        <AlertCircle className="w-3.5 h-3.5 text-destructive" />
-                        <span className="text-xs text-destructive">{entry.error || '获取失败'}</span>
-                      </div>
-                    )}
                   </div>
                 ))}
 

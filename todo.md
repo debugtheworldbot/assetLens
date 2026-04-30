@@ -25,3 +25,8 @@
 - [x] Redesign stock form: market selection via dropdown (A股/港股/美股)
 - [x] Support adding multiple stocks from same market in one session
 - [x] Immediately fetch price after each stock is added
+- [x] Implement backend stock lookup API (by exact ticker code)
+- [x] Frontend auto-search on ticker input with debounce + auto-fill name
+- [x] Implement real fuzzy search API returning multiple matches by code/name
+- [x] Build frontend autocomplete dropdown with suggestion list for stock search
+- [x] Fix: A-share ETF (e.g. 518880) cannot fetch price

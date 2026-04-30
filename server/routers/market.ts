@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
+import { callDataApi } from "../_core/dataApi";
+import { fuzzySearchStocks, type MarketType } from "../stockList";
 
 /**
  * Convert our symbol format (e.g. AAPL.US, 00700.HK, 600519.CN)
  * to Yahoo Finance format (e.g. AAPL, 0700.HK, 600519.SS)
+ *
+ * Shanghai (.SS): 6xxxxx (stocks), 5xxxxx (ETFs/funds), 9xxxxx (B shares)
+ * Shenzhen (.SZ): 0xxxxx, 3xxxxx (ChiNext), 1xxxxx (bonds/ETFs), 2xxxxx (B shares)
  */
 function toYahooSymbol(symbol: string): string {
   const match = symbol.trim().toUpperCase().match(/^([A-Z0-9]+)\.(US|HK|CN)$/);
@@ -18,137 +23,72 @@ function toYahooSymbol(symbol: string): string {
       const hkTicker = ticker.replace(/^0+/, "") || "0";
       return `${hkTicker.padStart(4, "0")}.HK`;
     }
-    case "CN":
-      return ticker.startsWith("6") ? `${ticker}.SS` : `${ticker}.SZ`;
+    case "CN": {
+      // Shanghai: starts with 5, 6, 9, or 000 (indices)
+      // Shenzhen: starts with 0 (except 000xxx indices), 1, 2, 3
+      const firstChar = ticker.charAt(0);
+      if (firstChar === "6" || firstChar === "5" || firstChar === "9") {
+        return `${ticker}.SS`;
+      }
+      return `${ticker}.SZ`;
+    }
     default:
       return symbol;
   }
 }
 
-/**
- * Convert our symbol format to Stooq format
- * Stooq uses: aapl.us, 00700.hk, 600519.cn (lowercase)
- */
-function toStooqSymbol(symbol: string): string {
-  return symbol.toLowerCase();
-}
-
 interface PriceResult {
   symbol: string;
   price: number | null;
+  name: string | null;
   asOf: string | null;
   error: string | null;
 }
 
 /**
- * Fetch price from Yahoo Finance chart API (server-side, no CORS issues)
+ * Fetch price from Yahoo Finance via Manus Data API (reliable, no CORS/timeout issues)
  */
-async function fetchFromYahoo(symbol: string): Promise<PriceResult> {
+async function fetchFromDataApi(symbol: string): Promise<PriceResult> {
   const yahooSymbol = toYahooSymbol(symbol);
   const upperSymbol = symbol.toUpperCase();
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; AssetLens/1.0)",
-        Accept: "application/json",
+    const response = (await callDataApi("YahooFinance/get_stock_chart", {
+      query: {
+        symbol: yahooSymbol,
+        interval: "1d",
+        range: "1d",
       },
-    });
-    clearTimeout(timeout);
+    })) as any;
 
-    if (!res.ok) {
-      return { symbol: upperSymbol, price: null, asOf: null, error: `Yahoo HTTP ${res.status}` };
-    }
-
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
+    const meta = response?.chart?.result?.[0]?.meta;
 
     if (meta?.regularMarketPrice) {
       return {
         symbol: upperSymbol,
         price: meta.regularMarketPrice,
-        asOf: new Date((meta.regularMarketTime || Date.now() / 1000) * 1000).toISOString(),
+        name: meta.longName || meta.shortName || null,
+        asOf: new Date(
+          (meta.regularMarketTime || Date.now() / 1000) * 1000
+        ).toISOString(),
         error: null,
       };
     }
 
-    return { symbol: upperSymbol, price: null, asOf: null, error: "Yahoo: 无法解析报价" };
-  } catch (err: any) {
     return {
       symbol: upperSymbol,
       price: null,
+      name: null,
       asOf: null,
-      error: err.name === "AbortError" ? "Yahoo: 请求超时" : `Yahoo: ${err.message}`,
-    };
-  }
-}
-
-/**
- * Fetch price from Stooq CSV API (server-side, no CORS issues)
- */
-async function fetchFromStooq(symbol: string): Promise<PriceResult> {
-  const stooqSymbol = toStooqSymbol(symbol);
-  const upperSymbol = symbol.toUpperCase();
-
-  try {
-    const url = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2c&h&e=csv`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; AssetLens/1.0)",
-      },
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      return { symbol: upperSymbol, price: null, asOf: null, error: `Stooq HTTP ${res.status}` };
-    }
-
-    const text = await res.text();
-    const lines = text.trim().split("\n");
-
-    if (lines.length < 2) {
-      return { symbol: upperSymbol, price: null, asOf: null, error: "Stooq: 无数据" };
-    }
-
-    const parts = lines[1].split(",");
-    if (parts.length < 4) {
-      return { symbol: upperSymbol, price: null, asOf: null, error: "Stooq: 格式错误" };
-    }
-
-    const date = parts[1];
-    const time = parts[2];
-    const closeStr = parts[3];
-
-    if (closeStr === "N/D" || date === "N/D") {
-      return { symbol: upperSymbol, price: null, asOf: null, error: "Stooq: 无报价(N/D)" };
-    }
-
-    const price = parseFloat(closeStr);
-    if (isNaN(price)) {
-      return { symbol: upperSymbol, price: null, asOf: null, error: "Stooq: 价格解析失败" };
-    }
-
-    return {
-      symbol: upperSymbol,
-      price,
-      asOf: `${date}T${time || "00:00:00"}`,
-      error: null,
+      error: "无法解析报价",
     };
   } catch (err: any) {
     return {
       symbol: upperSymbol,
       price: null,
+      name: null,
       asOf: null,
-      error: err.name === "AbortError" ? "Stooq: 请求超时" : `Stooq: ${err.message}`,
+      error: err.message || "获取失败",
     };
   }
 }
@@ -177,10 +117,34 @@ async function fetchFxRates(): Promise<Record<string, number> | null> {
   }
 }
 
+/**
+ * Search for a stock by ticker - returns name and price
+ */
+async function searchStock(
+  ticker: string,
+  market: "CN" | "HK" | "US"
+): Promise<{
+  symbol: string;
+  name: string | null;
+  price: number | null;
+  asOf: string | null;
+  error: string | null;
+}> {
+  const fullSymbol = `${ticker.toUpperCase()}.${market}`;
+  const result = await fetchFromDataApi(fullSymbol);
+  return {
+    symbol: fullSymbol,
+    name: result.name,
+    price: result.price,
+    asOf: result.asOf,
+    error: result.error,
+  };
+}
+
 export const marketRouter = router({
   /**
    * Get stock prices for one or more symbols
-   * Tries Yahoo Finance first, falls back to Stooq
+   * Uses Manus Data API (Yahoo Finance) for reliable server-side fetching
    */
   getStockPrices: publicProcedure
     .input(
@@ -189,24 +153,19 @@ export const marketRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const results: Record<string, { price: number; asOf: string }> = {};
+      const results: Record<string, { price: number; asOf: string; name?: string }> = {};
       const errors: Record<string, string> = {};
 
       // Fetch all symbols in parallel
       const fetchPromises = input.symbols.map(async (symbol) => {
-        // Try Yahoo first
-        let result = await fetchFromYahoo(symbol);
-
-        // If Yahoo fails, try Stooq
-        if (result.price === null) {
-          const stooqResult = await fetchFromStooq(symbol);
-          if (stooqResult.price !== null) {
-            result = stooqResult;
-          }
-        }
+        const result = await fetchFromDataApi(symbol);
 
         if (result.price !== null && result.asOf) {
-          results[result.symbol] = { price: result.price, asOf: result.asOf };
+          results[result.symbol] = {
+            price: result.price,
+            asOf: result.asOf,
+            name: result.name || undefined,
+          };
         } else {
           errors[result.symbol] = result.error || "获取失败";
         }
@@ -215,6 +174,42 @@ export const marketRouter = router({
       await Promise.allSettled(fetchPromises);
 
       return { prices: results, errors, fetchedAt: new Date().toISOString() };
+    }),
+
+  /**
+   * Search/lookup a stock by ticker code
+   * Returns name and current price
+   */
+  searchStock: publicProcedure
+    .input(
+      z.object({
+        ticker: z.string().min(1).max(10),
+        market: z.enum(["CN", "HK", "US"]),
+      })
+    )
+    .query(async ({ input }) => {
+      return searchStock(input.ticker, input.market);
+    }),
+
+  /**
+   * Fuzzy search stocks by code or name (Chinese / English)
+   * Returns matching stocks from the local stock list
+   */
+  fuzzySearch: publicProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(20),
+        market: z.enum(["CN", "HK", "US"]),
+        limit: z.number().min(1).max(20).optional().default(8),
+      })
+    )
+    .query(({ input }) => {
+      const results = fuzzySearchStocks(
+        input.query,
+        input.market as MarketType,
+        input.limit
+      );
+      return { results };
     }),
 
   /**

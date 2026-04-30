@@ -30,3 +30,6 @@
 - [x] Implement real fuzzy search API returning multiple matches by code/name
 - [x] Build frontend autocomplete dropdown with suggestion list for stock search
 - [x] Fix: A-share ETF (e.g. 518880) cannot fetch price
+- [x] Each stock shows a unique color in statistics/charts
+- [x] Support adding custom tags to each stock asset
+- [x] Add tag-based pie chart on the statistics page (Home)

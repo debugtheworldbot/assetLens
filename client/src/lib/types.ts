@@ -19,6 +19,7 @@ export interface BaseAsset {
   name: string;
   liquidity: Liquidity;
   note?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface StockAsset extends BaseAsset {
   lastPrice?: number;
   lastPriceAt?: string;
   pricingError?: boolean;
+  color?: string;
 }
 
 export interface CashAsset extends BaseAsset {

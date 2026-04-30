@@ -1,6 +1,7 @@
 import { Asset, Category, Currency, Liquidity, PriceCache } from './types';
 import { getAssetValueInBaseCurrency } from './assetValue';
 import { CATEGORIES } from './categories';
+import { STOCK_PALETTE } from './stockColors';
 
 export interface CategorySummary {
   category: Category;
@@ -70,6 +71,99 @@ export function getLiquiditySummary(
     mediumPct: total > 0 ? (medium / total) * 100 : 0,
     lowPct: total > 0 ? (low / total) * 100 : 0,
   };
+}
+
+export interface TagSummary {
+  tag: string;
+  value: number;
+  percentage: number;
+  color: string;
+  assets: { id: string; name: string; value: number }[];
+}
+
+const TAG_COLORS = [
+  '#E76F51', '#2A9D8F', '#E9C46A', '#264653', '#8338EC',
+  '#FF006E', '#3A86FF', '#06D6A0', '#EF476F', '#118AB2',
+  '#FFD166', '#D62828', '#457B9D', '#6D6875', '#B5838D',
+];
+
+export function getTagSummaries(
+  assets: Asset[],
+  baseCurrency: Currency,
+  rates: Record<Currency, number>,
+  priceCache: PriceCache
+): TagSummary[] {
+  const tagMap: Record<string, { value: number; assets: { id: string; name: string; value: number }[] }> = {};
+  let total = 0;
+
+  for (const asset of assets) {
+    const val = getAssetValueInBaseCurrency(asset, baseCurrency, rates, priceCache);
+    total += val;
+    const tags = asset.tags && asset.tags.length > 0 ? asset.tags : ['未分类'];
+    for (const tag of tags) {
+      if (!tagMap[tag]) {
+        tagMap[tag] = { value: 0, assets: [] };
+      }
+      tagMap[tag].value += val;
+      tagMap[tag].assets.push({ id: asset.id, name: asset.name, value: val });
+    }
+  }
+
+  return Object.entries(tagMap)
+    .map(([tag, data], index) => ({
+      tag,
+      value: data.value,
+      percentage: total > 0 ? (data.value / total) * 100 : 0,
+      color: TAG_COLORS[index % TAG_COLORS.length],
+      assets: data.assets,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export interface StockSummary {
+  id: string;
+  name: string;
+  symbol: string;
+  value: number;
+  percentage: number;
+  color: string;
+}
+
+export function getStockSummaries(
+  assets: Asset[],
+  baseCurrency: Currency,
+  rates: Record<Currency, number>,
+  priceCache: PriceCache
+): StockSummary[] {
+  const stockAssets = assets.filter(a => a.category === 'stock') as (Asset & { symbol: string; color?: string })[];
+  let total = 0;
+  const items: { id: string; name: string; symbol: string; value: number; color?: string }[] = [];
+
+  for (const asset of stockAssets) {
+    const val = getAssetValueInBaseCurrency(asset, baseCurrency, rates, priceCache);
+    total += val;
+    items.push({ id: asset.id, name: asset.name, symbol: asset.symbol, value: val, color: asset.color });
+  }
+
+  // Also add non-stock assets as a single "其他" entry
+  const nonStockAssets = assets.filter(a => a.category !== 'stock');
+  let nonStockTotal = 0;
+  for (const asset of nonStockAssets) {
+    nonStockTotal += getAssetValueInBaseCurrency(asset, baseCurrency, rates, priceCache);
+  }
+  if (nonStockTotal > 0) {
+    total += nonStockTotal;
+    items.push({ id: '__non_stock__', name: '其他资产', symbol: '', value: nonStockTotal });
+  }
+
+  return items.map((item, index) => ({
+    id: item.id,
+    name: item.name,
+    symbol: item.symbol,
+    value: item.value,
+    percentage: total > 0 ? (item.value / total) * 100 : 0,
+    color: item.color || STOCK_PALETTE[index % STOCK_PALETTE.length],
+  }));
 }
 
 export function getRiskExposure(

@@ -17,6 +17,8 @@ interface AssetStore {
   getExportState: () => AppState;
   clearAll: () => void;
   updateStockPrice: (symbol: string, price: number, asOf: string) => void;
+  updateAssetTags: (id: string, tags: string[]) => void;
+  updateAssetColor: (id: string, color: string) => void;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -109,6 +111,26 @@ export const useAssetStore = create<AssetStore>()(
             }
             return a;
           }) as Asset[],
+        }));
+      },
+
+      updateAssetTags: (id, tags) => {
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id
+              ? { ...a, tags, updatedAt: new Date().toISOString() }
+              : a
+          ) as Asset[],
+        }));
+      },
+
+      updateAssetColor: (id, color) => {
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id
+              ? { ...a, color, updatedAt: new Date().toISOString() }
+              : a
+          ) as Asset[],
         }));
       },
     }),

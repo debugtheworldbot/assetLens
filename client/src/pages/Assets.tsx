@@ -8,7 +8,9 @@ import { getCategorySummaries } from '@/lib/analytics';
 import { formatCurrency, formatTimeAgo } from '@/lib/format';
 import { getCategoryLabel, getCategoryColor, CATEGORIES } from '@/lib/categories';
 import { Asset, Category, StockAsset } from '@/lib/types';
-import { Plus, Search, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, AlertTriangle, Tag } from 'lucide-react';
+import TagEditor from '@/components/assets/TagEditor';
+import { assignStockColors } from '@/lib/stockColors';
 import { cn } from '@/lib/utils';
 import AssetFormModal from '@/components/assets/AssetFormModal';
 import CategoryBar from '@/components/charts/CategoryBar';
@@ -24,6 +26,8 @@ export default function Assets() {
   const [filterCategory, setFilterCategory] = useState<Category | 'all'>('all');
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
+  const updateAssetTags = useAssetStore((s) => s.updateAssetTags);
 
   const filteredAssets = useMemo(() => {
     return assets.filter((a) => {
@@ -39,6 +43,14 @@ export default function Assets() {
   }, [assets, filterCategory, search]);
 
   const categorySummaries = getCategorySummaries(assets, settings.baseCurrency, rates, priceCache);
+  const stockColorMap = useMemo(() => assignStockColors(assets), [assets]);
+
+  // Collect all unique tags for suggestions
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    assets.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
+    return Array.from(tagSet);
+  }, [assets]);
 
   const handleEdit = (asset: Asset) => {
     setEditingAsset(asset);
@@ -141,10 +153,10 @@ export default function Assets() {
                 className="bg-card rounded-xl border border-border p-4 shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start gap-3">
-                  {/* Category dot */}
+                  {/* Category dot - use stock-specific color for stocks */}
                   <div
                     className="w-3 h-3 rounded-full mt-1.5 flex-shrink-0"
-                    style={{ backgroundColor: getCategoryColor(asset.category) }}
+                    style={{ backgroundColor: isStock ? (stockColorMap[asset.id] || getCategoryColor(asset.category)) : getCategoryColor(asset.category) }}
                   />
 
                   {/* Content */}
@@ -179,6 +191,38 @@ export default function Assets() {
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatCurrency(valueInOriginal, asset.currency)}
                       </p>
+                    )}
+
+                    {/* Tags */}
+                    <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                      {asset.tags && asset.tags.length > 0 ? (
+                        asset.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-warm-orange/10 text-warm-orange border border-warm-orange/20"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : null}
+                      <button
+                        onClick={() => setEditingTagsId(editingTagsId === asset.id ? null : asset.id)}
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] text-muted-foreground hover:text-warm-orange hover:bg-warm-orange/5 transition-colors"
+                      >
+                        <Tag className="w-2.5 h-2.5" />
+                        {asset.tags && asset.tags.length > 0 ? '编辑' : '添加标签'}
+                      </button>
+                    </div>
+
+                    {/* Inline Tag Editor */}
+                    {editingTagsId === asset.id && (
+                      <div className="mt-2">
+                        <TagEditor
+                          tags={asset.tags || []}
+                          onChange={(tags) => updateAssetTags(asset.id, tags)}
+                          suggestions={allTags}
+                        />
+                      </div>
                     )}
                   </div>
 

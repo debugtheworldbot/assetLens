@@ -2,13 +2,15 @@ import { useAssetStore } from '@/store/useAssetStore';
 import { useFxStore } from '@/store/useFxStore';
 import { usePriceCache } from '@/hooks/usePriceCache';
 import { getTotalValue } from '@/lib/assetValue';
-import { getCategorySummaries, getLiquiditySummary, getRiskExposure } from '@/lib/analytics';
+import { getCategorySummaries, getLiquiditySummary, getRiskExposure, getTagSummaries, getStockSummaries } from '@/lib/analytics';
 import { generateAdvice } from '@/lib/advice';
 import { formatCurrency, formatPercentage } from '@/lib/format';
 import { Link } from 'wouter';
-import { AlertTriangle, ArrowRight, Shield, Droplets } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Shield, Droplets, PieChart, Tag } from 'lucide-react';
 import CategoryDonut from '@/components/charts/CategoryDonut';
 import LiquidityBar from '@/components/charts/LiquidityBar';
+import TagDonut from '@/components/charts/TagDonut';
+import StockDonut from '@/components/charts/StockDonut';
 
 export default function Home() {
 
@@ -22,6 +24,8 @@ export default function Home() {
   const liquiditySummary = getLiquiditySummary(assets, settings.baseCurrency, rates, priceCache);
   const adviceItems = generateAdvice(assets, settings.baseCurrency, rates, priceCache, settings.riskLevel);
   const riskExposure = getRiskExposure(assets, settings.baseCurrency, rates, priceCache);
+  const tagSummaries = getTagSummaries(assets, settings.baseCurrency, rates, priceCache);
+  const stockSummaries = getStockSummaries(assets, settings.baseCurrency, rates, priceCache);
 
   const riskLabels = ['', '保守', '稳健', '平衡', '积极', '激进'];
 
@@ -82,6 +86,28 @@ export default function Home() {
             <span className="text-xs text-warm-orange hover:underline cursor-pointer">调整等级 →</span>
           </Link>
         </div>
+
+        {/* Stock Distribution - each stock with unique color */}
+        {stockSummaries.length > 1 && (
+          <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <PieChart className="w-4 h-4 text-warm-orange" />
+              <h3 className="text-sm font-semibold text-foreground">个股分布</h3>
+            </div>
+            <StockDonut data={stockSummaries} total={total} baseCurrency={settings.baseCurrency} />
+          </div>
+        )}
+
+        {/* Tag Distribution Pie Chart */}
+        {tagSummaries.length > 0 && tagSummaries.some(t => t.tag !== '未分类') && (
+          <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Tag className="w-4 h-4 text-sage-green" />
+              <h3 className="text-sm font-semibold text-foreground">标签分布</h3>
+            </div>
+            <TagDonut data={tagSummaries} total={total} baseCurrency={settings.baseCurrency} />
+          </div>
+        )}
 
         {/* Liquidity Bar */}
         <div className="bg-card rounded-xl border border-border p-5 shadow-sm">

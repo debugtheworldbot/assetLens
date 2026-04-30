@@ -22,3 +22,6 @@
 - [x] Test backend proxy API end-to-end
 - [x] Verify stock price auto-fetch works through backend
 - [x] Make manual price input optional for stocks (backend auto-fetches price)
+- [x] Redesign stock form: market selection via dropdown (A股/港股/美股)
+- [x] Support adding multiple stocks from same market in one session
+- [x] Immediately fetch price after each stock is added

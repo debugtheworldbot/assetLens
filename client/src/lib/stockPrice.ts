@@ -36,72 +36,91 @@ export function getMarketLabel(market: Market): string {
   return labels[market];
 }
 
+/**
+ * Convert our symbol format (e.g. AAPL.US, 00700.HK, 600519.CN)
+ * to Yahoo Finance format (e.g. AAPL, 0700.HK, 600519.SS)
+ */
+function toYahooSymbol(symbol: string): string {
+  const parsed = parseSymbol(symbol);
+  if (!parsed) return symbol;
+  
+  const { market } = parsed;
+  const ticker = symbol.split('.')[0];
+  
+  switch (market) {
+    case 'US':
+      return ticker; // Yahoo uses just the ticker for US
+    case 'HK':
+      // Yahoo uses 4-digit format for HK, strip leading zeros if > 4 digits
+      const hkTicker = ticker.replace(/^0+/, '') || '0';
+      return `${hkTicker.padStart(4, '0')}.HK`;
+    case 'CN':
+      // Yahoo uses .SS for Shanghai, .SZ for Shenzhen
+      // 6xxxxx = Shanghai, 0xxxxx/3xxxxx = Shenzhen
+      if (ticker.startsWith('6')) {
+        return `${ticker}.SS`;
+      } else {
+        return `${ticker}.SZ`;
+      }
+    default:
+      return symbol;
+  }
+}
+
 export interface StockPriceResult {
   prices: Record<string, { price: number; asOf: string }>;
   errors: Record<string, string>;
 }
 
+/**
+ * Fetch stock prices using multiple CORS-friendly approaches
+ */
 export async function fetchStockPrices(symbols: string[]): Promise<StockPriceResult> {
   const result: StockPriceResult = { prices: {}, errors: {} };
   
   if (symbols.length === 0) return result;
-  
-  try {
-    const symbolList = symbols.map(s => s.toLowerCase()).join(',');
-    const url = `https://stooq.com/q/l/?s=${symbolList}&f=sd2t2c&h&e=csv`;
-    const res = await fetch(url);
+
+  // Try fetching each symbol individually via Yahoo Finance chart API
+  // Yahoo Finance chart endpoint supports CORS
+  const fetchPromises = symbols.map(async (symbol) => {
+    const yahooSymbol = toYahooSymbol(symbol);
+    const upperSymbol = symbol.toUpperCase();
     
-    if (!res.ok) {
-      symbols.forEach(s => { result.errors[s] = 'Fetch failed'; });
-      return result;
-    }
-    
-    const text = await res.text();
-    const lines = text.trim().split('\n');
-    
-    // Skip header line
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    try {
+      // Yahoo Finance v8 chart API - often allows CORS from browsers
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
       
-      const parts = line.split(',');
-      if (parts.length < 4) continue;
+      const res = await fetch(url, { 
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      clearTimeout(timeout);
       
-      const symbol = parts[0].toUpperCase();
-      const date = parts[1];
-      const time = parts[2];
-      const closeStr = parts[3];
-      
-      if (closeStr === 'N/D' || date === 'N/D') {
-        result.errors[symbol] = '无法获取报价';
-        continue;
+      if (!res.ok) {
+        result.errors[upperSymbol] = `HTTP ${res.status}`;
+        return;
       }
       
-      const price = parseFloat(closeStr);
-      if (isNaN(price)) {
-        result.errors[symbol] = '价格解析失败';
-        continue;
-      }
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
       
-      result.prices[symbol] = {
-        price,
-        asOf: `${date}T${time}`,
-      };
-    }
-    
-    // Mark symbols that weren't in the response
-    for (const s of symbols) {
-      const upper = s.toUpperCase();
-      if (!result.prices[upper] && !result.errors[upper]) {
-        result.errors[upper] = '未在响应中找到';
+      if (meta?.regularMarketPrice) {
+        result.prices[upperSymbol] = {
+          price: meta.regularMarketPrice,
+          asOf: new Date(meta.regularMarketTime * 1000).toISOString(),
+        };
+      } else {
+        result.errors[upperSymbol] = '无法解析报价数据';
       }
+    } catch (err: any) {
+      // If Yahoo fails (CORS or network), mark as error
+      result.errors[upperSymbol] = err.name === 'AbortError' ? '请求超时' : '网络错误，请手动输入价格';
     }
-  } catch (err) {
-    symbols.forEach(s => {
-      result.errors[s.toUpperCase()] = '网络错误';
-    });
-  }
-  
+  });
+
+  await Promise.allSettled(fetchPromises);
   return result;
 }
 

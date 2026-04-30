@@ -11,6 +11,7 @@ import CategoryDonut from '@/components/charts/CategoryDonut';
 import LiquidityBar from '@/components/charts/LiquidityBar';
 
 export default function Home() {
+
   const assets = useAssetStore((s) => s.assets);
   const settings = useAssetStore((s) => s.settings);
   const rates = useFxStore((s) => s.rates);

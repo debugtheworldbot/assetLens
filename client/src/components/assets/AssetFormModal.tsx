@@ -16,6 +16,7 @@ interface Props {
 export default function AssetFormModal({ asset, onClose }: Props) {
   const addAsset = useAssetStore((s) => s.addAsset);
   const updateAsset = useAssetStore((s) => s.updateAsset);
+  const updateStockPrice = useAssetStore((s) => s.updateStockPrice);
   const settings = useAssetStore((s) => s.settings);
   const fetchSingle = usePriceStore((s) => s.fetchSingle);
 
@@ -36,6 +37,11 @@ export default function AssetFormModal({ asset, onClose }: Props) {
   );
   const [shares, setShares] = useState<string>(
     asset?.category === 'stock' ? String((asset as StockAsset).shares) : ''
+  );
+  const [manualPrice, setManualPrice] = useState<string>(
+    asset?.category === 'stock' && (asset as StockAsset).lastPrice
+      ? String((asset as StockAsset).lastPrice)
+      : ''
   );
   const [symbolValid, setSymbolValid] = useState<boolean>(true);
   const [symbolMarketLabel, setSymbolMarketLabel] = useState<string>('');
@@ -68,6 +74,8 @@ export default function AssetFormModal({ asset, onClose }: Props) {
     if (isStock) {
       if (!symbol || !parseSymbol(symbol)) return false;
       if (!shares || parseFloat(shares) <= 0) return false;
+      // Must have manual price (auto-fetch is unreliable due to CORS)
+      if (!manualPrice || parseFloat(manualPrice) <= 0) return false;
     } else {
       if (!amount || parseFloat(amount) <= 0) return false;
     }
@@ -80,6 +88,8 @@ export default function AssetFormModal({ asset, onClose }: Props) {
 
     if (isStock) {
       const parsed = parseSymbol(symbol)!;
+      const priceValue = parseFloat(manualPrice);
+      
       const assetData: Omit<StockAsset, 'id' | 'createdAt' | 'updatedAt'> = {
         category: 'stock',
         name: name.trim(),
@@ -89,6 +99,9 @@ export default function AssetFormModal({ asset, onClose }: Props) {
         currency: parsed.currency,
         liquidity,
         note: note.trim() || undefined,
+        lastPrice: priceValue,
+        lastPriceAt: new Date().toISOString(),
+        pricingError: false,
       };
 
       if (isEditing) {
@@ -96,8 +109,12 @@ export default function AssetFormModal({ asset, onClose }: Props) {
       } else {
         addAsset(assetData);
       }
-      // Fetch price for this symbol
-      fetchSingle(parsed.symbol);
+      
+      // Also update the price store so it persists
+      updateStockPrice(parsed.symbol, priceValue, new Date().toISOString());
+      
+      // Fetch live price in background via backend proxy
+      fetchSingle(parsed.symbol).catch(() => {});
     } else {
       const assetData: Omit<CashAsset, 'id' | 'createdAt' | 'updatedAt'> = {
         category,
@@ -117,6 +134,11 @@ export default function AssetFormModal({ asset, onClose }: Props) {
 
     onClose();
   };
+
+  // Compute estimated value for preview
+  const estimatedValue = isStock && shares && manualPrice
+    ? (parseFloat(shares) * parseFloat(manualPrice)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -167,7 +189,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={isStock ? '如：苹果公司' : '如：工商银行活期'}
+              placeholder={isStock ? '如：腾讯控股' : '如：工商银行活期'}
               className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
             />
           </div>
@@ -188,7 +210,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                   type="text"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                  placeholder="如 AAPL.US / 0700.HK / 600519.CN"
+                  placeholder="如 AAPL.US / 00700.HK / 600519.CN"
                   className={cn(
                     'w-full px-3 py-2 rounded-lg border bg-background text-sm font-mono focus:outline-none focus:ring-2',
                     !symbolValid
@@ -201,21 +223,46 @@ export default function AssetFormModal({ asset, onClose }: Props) {
                 )}
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">持有股数</label>
-                <input
-                  type="number"
-                  value={shares}
-                  onChange={(e) => setShares(e.target.value)}
-                  placeholder="100"
-                  min="0"
-                  step="any"
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">持有股数</label>
+                  <input
+                    type="number"
+                    value={shares}
+                    onChange={(e) => setShares(e.target.value)}
+                    placeholder="100"
+                    min="0"
+                    step="any"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                    当前单价 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    value={manualPrice}
+                    onChange={(e) => setManualPrice(e.target.value)}
+                    placeholder="如 450.00"
+                    min="0"
+                    step="any"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+                  />
+                </div>
               </div>
 
+              {/* Estimated value preview */}
+              {estimatedValue && (
+                <div className="bg-accent/50 rounded-lg px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    估算市值: <span className="font-semibold text-foreground font-mono">{currency} {estimatedValue}</span>
+                  </p>
+                </div>
+              )}
+
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">币种（自动）</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">币种（根据市场自动设置）</label>
                 <input
                   type="text"
                   value={currency}

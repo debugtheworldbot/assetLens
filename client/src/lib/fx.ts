@@ -29,24 +29,59 @@ export function getFxStatus(fetchedAt: string | null): 'fresh' | 'stale' | 'offl
 }
 
 export async function fetchLatestRates(): Promise<Record<Currency, number> | null> {
-  try {
-    const res = await fetch('https://api.exchangerate.host/latest?base=USD');
-    if (!res.ok) throw new Error('FX fetch failed');
-    const data = await res.json();
-    if (!data.rates) throw new Error('No rates in response');
-    
-    const currencies: Currency[] = ['USD', 'CNY', 'HKD', 'EUR', 'JPY', 'GBP', 'SGD', 'KRW', 'USDT'];
-    const rates: Record<string, number> = { USD: 1, USDT: 1 };
-    
-    for (const c of currencies) {
-      if (c === 'USD' || c === 'USDT') continue;
-      if (data.rates[c]) {
-        rates[c] = data.rates[c];
+  // Try multiple free APIs in order of reliability
+  const apis = [
+    {
+      url: 'https://open.er-api.com/v6/latest/USD',
+      parse: (data: any) => {
+        if (data.result !== 'success' || !data.rates) return null;
+        return data.rates;
+      },
+    },
+    {
+      url: 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
+      parse: (data: any) => {
+        if (!data.usd) return null;
+        // This API returns lowercase keys, need to map
+        const map: Record<string, string> = {
+          cny: 'CNY', hkd: 'HKD', eur: 'EUR', jpy: 'JPY',
+          gbp: 'GBP', sgd: 'SGD', krw: 'KRW',
+        };
+        const rates: Record<string, number> = {};
+        for (const [lower, upper] of Object.entries(map)) {
+          if (data.usd[lower]) rates[upper] = data.usd[lower];
+        }
+        return Object.keys(rates).length > 0 ? rates : null;
+      },
+    },
+  ];
+
+  const currencies: Currency[] = ['USD', 'CNY', 'HKD', 'EUR', 'JPY', 'GBP', 'SGD', 'KRW', 'USDT'];
+
+  for (const api of apis) {
+    try {
+      const res = await fetch(api.url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const rawRates = api.parse(data);
+      if (!rawRates) continue;
+
+      const rates: Record<string, number> = { USD: 1, USDT: 1 };
+      for (const c of currencies) {
+        if (c === 'USD' || c === 'USDT') continue;
+        if (rawRates[c]) {
+          rates[c] = rawRates[c];
+        }
       }
+
+      // Verify we got at least CNY
+      if (rates['CNY']) {
+        return rates as Record<Currency, number>;
+      }
+    } catch {
+      continue;
     }
-    
-    return rates as Record<Currency, number>;
-  } catch {
-    return null;
   }
+
+  return null;
 }

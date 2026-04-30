@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PriceCache } from '../lib/types';
-import { fetchStockPrices, getPriceStatus } from '../lib/stockPrice';
 import { useAssetStore } from './useAssetStore';
 
 interface PriceStore {
@@ -12,6 +11,47 @@ interface PriceStore {
   loading: boolean;
   refresh: () => Promise<void>;
   fetchSingle: (symbol: string) => Promise<void>;
+}
+
+/**
+ * Fetch stock prices through the backend proxy API (avoids CORS issues)
+ * tRPC uses superjson transformer:
+ *   - input must be wrapped in { json: { ... } }
+ *   - response is in { result: { data: { json: ... } } }
+ */
+async function fetchPricesFromBackend(symbols: string[]): Promise<{
+  prices: Record<string, { price: number; asOf: string }>;
+  errors: Record<string, string>;
+}> {
+  try {
+    // tRPC superjson format: input must be { json: { symbols: [...] } }
+    const input = JSON.stringify({ json: { symbols } });
+    const res = await fetch(`/api/trpc/market.getStockPrices?input=${encodeURIComponent(input)}`, {
+      credentials: 'include',
+    });
+    
+    if (!res.ok) {
+      const errorMap: Record<string, string> = {};
+      symbols.forEach(s => { errorMap[s.toUpperCase()] = `HTTP ${res.status}`; });
+      return { prices: {}, errors: errorMap };
+    }
+    
+    const json = await res.json();
+    // tRPC superjson response: { result: { data: { json: { prices, errors, fetchedAt } } } }
+    const data = json?.result?.data?.json;
+    
+    if (!data) {
+      const errorMap: Record<string, string> = {};
+      symbols.forEach(s => { errorMap[s.toUpperCase()] = '响应格式错误'; });
+      return { prices: {}, errors: errorMap };
+    }
+    
+    return { prices: data.prices || {}, errors: data.errors || {} };
+  } catch (err: any) {
+    const errorMap: Record<string, string> = {};
+    symbols.forEach(s => { errorMap[s.toUpperCase()] = err.message || '网络错误'; });
+    return { prices: {}, errors: errorMap };
+  }
 }
 
 export const usePriceStore = create<PriceStore>()(
@@ -35,7 +75,7 @@ export const usePriceStore = create<PriceStore>()(
         }
 
         set({ loading: true });
-        const result = await fetchStockPrices(stockSymbols);
+        const result = await fetchPricesFromBackend(stockSymbols);
         const now = new Date().toISOString();
 
         const existingPrices = get().prices;
@@ -57,7 +97,7 @@ export const usePriceStore = create<PriceStore>()(
 
       fetchSingle: async (symbol: string) => {
         set({ loading: true });
-        const result = await fetchStockPrices([symbol]);
+        const result = await fetchPricesFromBackend([symbol]);
         const now = new Date().toISOString();
 
         const existingPrices = get().prices;

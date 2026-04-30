@@ -1,0 +1,23 @@
+# Project TODO
+
+- [x] Basic homepage layout with dashboard
+- [x] Sidebar navigation
+- [x] Asset form modal (add/edit)
+- [x] Assets list page
+- [x] Category donut chart
+- [x] Liquidity bar chart
+- [x] Advice page with risk slider
+- [x] Settings page with currency/risk/import/export
+- [x] FX rate fetching (open.er-api.com)
+- [x] Stock price fetching (Stooq)
+- [x] Import/export JSON backup
+- [x] Fix infinite loop in stores (use individual selectors)
+- [x] Fix FX API (switch from exchangerate.host to open.er-api.com)
+- [x] Upgrade to full-stack architecture (web-db-user)
+- [x] Add backend proxy API for stock prices (Yahoo + Stooq fallback)
+- [x] Add backend proxy API for FX rates
+- [x] Frontend: use backend API for FX rates instead of direct fetch
+- [x] Frontend: use backend API for stock prices instead of direct fetch
+- [x] Add manual price input field for stocks in form
+- [x] Test backend proxy API end-to-end
+- [x] Verify stock price auto-fetch works through backend

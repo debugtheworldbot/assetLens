@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Plus, Loader2, Check, AlertCircle, Trash2, Search, ChevronDown } from 'lucide-react';
+import { Plus, Loader2, Check, AlertCircle, Trash2, Search, ChevronDown } from 'lucide-react';
 import { useAssetStore } from '@/store/useAssetStore';
 import { usePriceStore } from '@/store/usePriceStore';
 import { Asset, Category, Currency, Liquidity, Market, StockAsset, CashAsset, CryptoAsset } from '@/lib/types';
@@ -7,9 +7,12 @@ import { CATEGORIES, getDefaultLiquidity } from '@/lib/categories';
 import { CURRENCIES } from '@/lib/currencies';
 import { parseSymbol, getMarketLabel } from '@/lib/stockPrice';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   asset: Asset | null;
+  open: boolean;
   onClose: () => void;
 }
 
@@ -59,7 +62,7 @@ function createEmptyEntry(): StockEntry {
   };
 }
 
-export default function AssetFormModal({ asset, onClose }: Props) {
+export default function AssetFormModal({ asset, open, onClose }: Props) {
   const addAsset = useAssetStore((s) => s.addAsset);
   const updateAsset = useAssetStore((s) => s.updateAsset);
   const updateStockPrice = useAssetStore((s) => s.updateStockPrice);
@@ -449,20 +452,11 @@ export default function AssetFormModal({ asset, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
-      {/* Modal */}
-      <div className="relative bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">
-            {isEditing ? '编辑资产' : '新增资产'}
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent transition-colors">
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto p-0 gap-0">
+        <DialogHeader className="p-5 pb-4 border-b border-border">
+          <DialogTitle>{isEditing ? '编辑资产' : '新增资产'}</DialogTitle>
+        </DialogHeader>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -931,15 +925,15 @@ export default function AssetFormModal({ asset, onClose }: Props) {
           )}
 
           {/* Submit */}
-          <button
+          <Button
             type="submit"
             disabled={!canSubmit()}
-            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+            className="w-full"
           >
             {isEditing ? '保存修改' : isStock ? `添加 ${entries.filter(e => e.ticker.trim() && e.name.trim() && e.shares).length} 只股票` : '添加资产'}
-          </button>
+          </Button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

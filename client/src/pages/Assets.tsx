@@ -311,12 +311,11 @@ export default function Assets() {
       )}
 
       {/* Asset Form Modal */}
-      {showForm && (
-        <AssetFormModal
-          asset={editingAsset}
-          onClose={handleCloseForm}
-        />
-      )}
+      <AssetFormModal
+        open={showForm}
+        asset={editingAsset}
+        onClose={handleCloseForm}
+      />
     </div>
   );
 }

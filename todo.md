@@ -43,3 +43,5 @@
 - [x] 重新设计资产列表页（shadcn Card/Badge/Input/Dialog）
 - [x] 重新设计建议页和设置页
 - [x] 添加页面过渡动画和微交互效果
+- [x] 将 AssetFormModal 迁移为 shadcn Dialog 组件
+- [x] 添加深色/浅色主题切换功能

@@ -1,9 +1,11 @@
 import { useLocation, Link } from 'wouter';
-import { Home, Wallet, Lightbulb, Settings } from 'lucide-react';
+import { Home, Wallet, Lightbulb, Settings, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const navItems = [
   { path: '/', label: '体检', icon: Home },
@@ -14,6 +16,7 @@ const navItems = [
 
 export default function Sidebar() {
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <>
@@ -69,8 +72,29 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="px-4 py-4">
+        {/* Footer with theme toggle */}
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex items-center justify-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Moon className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                {theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <div className="px-3 py-2.5 rounded-xl bg-muted/50">
             <p className="text-[10px] text-muted-foreground text-center">
               数据仅存本地 · v1.0
@@ -115,6 +139,26 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {/* Mobile theme toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.div
+              className="relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-muted-foreground"
+              whileTap={{ scale: 0.9 }}
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-5 h-5 relative z-10" />
+              ) : (
+                <Moon className="w-5 h-5 relative z-10" />
+              )}
+              <span className="text-[10px] font-medium relative z-10">主题</span>
+            </motion.div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {theme === 'dark' ? '浅色模式' : '深色模式'}
+          </TooltipContent>
+        </Tooltip>
       </nav>
     </>
   );

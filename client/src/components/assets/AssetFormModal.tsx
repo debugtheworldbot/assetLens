@@ -1,14 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Loader2, Check, AlertCircle, Trash2, Search, ChevronDown } from 'lucide-react';
+import { Plus, Loader2, Check, AlertCircle, Trash2, Search } from 'lucide-react';
 import { useAssetStore } from '@/store/useAssetStore';
 import { usePriceStore } from '@/store/usePriceStore';
 import { Asset, Category, Currency, Liquidity, Market, StockAsset, CashAsset, CryptoAsset } from '@/lib/types';
 import { CATEGORIES, getDefaultLiquidity } from '@/lib/categories';
 import { CURRENCIES } from '@/lib/currencies';
-import { parseSymbol, getMarketLabel } from '@/lib/stockPrice';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Props {
   asset: Asset | null;
@@ -16,7 +22,6 @@ interface Props {
   onClose: () => void;
 }
 
-// Market options for the dropdown
 const MARKETS: { value: Market; label: string; suffix: string; placeholder: string; currency: Currency }[] = [
   { value: 'CN', label: 'A股', suffix: '.CN', placeholder: '输入代码或名称搜索...', currency: 'CNY' },
   { value: 'HK', label: '港股', suffix: '.HK', placeholder: '输入代码或名称搜索...', currency: 'HKD' },
@@ -32,13 +37,12 @@ interface SearchResult {
 interface StockEntry {
   id: string;
   name: string;
-  ticker: string; // raw ticker without market suffix
+  ticker: string;
   shares: string;
   searchStatus: 'idle' | 'searching' | 'found' | 'not_found' | 'error';
   price: number | null;
   priceAsOf: string | null;
   error: string | null;
-  // Search dropdown state
   searchQuery: string;
   searchResults: SearchResult[];
   showDropdown: boolean;
@@ -61,6 +65,12 @@ function createEmptyEntry(): StockEntry {
     isSearching: false,
   };
 }
+
+const LIQUIDITY_OPTIONS: { value: Liquidity; label: string }[] = [
+  { value: 'high', label: '高' },
+  { value: 'medium', label: '中' },
+  { value: 'low', label: '低' },
+];
 
 export default function AssetFormModal({ asset, open, onClose }: Props) {
   const addAsset = useAssetStore((s) => s.addAsset);
@@ -92,7 +102,7 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
   );
   const [currency, setCurrency] = useState<Currency>(asset?.currency || settings.baseCurrency);
 
-  // Stock fields - new multi-stock approach
+  // Stock fields
   const [market, setMarket] = useState<Market>(
     asset?.category === 'stock' ? (asset as StockAsset).market : 'CN'
   );
@@ -119,13 +129,11 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
   });
 
   const isStock = category === 'stock';
+  const isCrypto = category === 'crypto';
   const isEditing = !!asset;
-
   const marketInfo = MARKETS.find(m => m.value === market)!;
 
-  // Debounce timers for fuzzy search
   const searchTimers = useRef<Record<string, NodeJS.Timeout>>({});
-  // Ref for dropdown click-outside handling
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
@@ -134,14 +142,12 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
     }
   }, [category, isEditing]);
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       Object.values(searchTimers.current).forEach(clearTimeout);
     };
   }, []);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       setEntries(prev => prev.map(entry => {
@@ -174,12 +180,9 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
       const res = await fetch(`/api/trpc/market.fuzzySearch?input=${encodeURIComponent(input)}`, {
         credentials: 'include',
       });
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       const json = await res.json();
       const results: SearchResult[] = json?.result?.data?.json?.results || [];
-
       setEntries(prev => prev.map(e =>
         e.id === entryId ? {
           ...e,
@@ -206,9 +209,7 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
       const res = await fetch(`/api/trpc/market.searchStock?input=${encodeURIComponent(input)}`, {
         credentials: 'include',
       });
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       const json = await res.json();
       const data = json?.result?.data?.json;
 
@@ -217,7 +218,7 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
           e.id === entryId ? {
             ...e,
             searchStatus: 'found',
-            name: e.name || data.name || '', // only auto-fill if name is empty
+            name: e.name || data.name || '',
             price: data.price,
             priceAsOf: data.asOf,
             error: null,
@@ -225,39 +226,25 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
         ));
       } else if (data?.error) {
         setEntries(prev => prev.map(e =>
-          e.id === entryId ? {
-            ...e,
-            searchStatus: 'not_found',
-            error: data.error,
-          } : e
+          e.id === entryId ? { ...e, searchStatus: 'not_found', error: data.error } : e
         ));
       } else {
         setEntries(prev => prev.map(e =>
-          e.id === entryId ? {
-            ...e,
-            searchStatus: 'not_found',
-            error: '未找到该股票',
-          } : e
+          e.id === entryId ? { ...e, searchStatus: 'not_found', error: '未找到该股票' } : e
         ));
       }
     } catch (err: any) {
       setEntries(prev => prev.map(e =>
-        e.id === entryId ? {
-          ...e,
-          searchStatus: 'error',
-          error: err.message || '获取价格失败',
-        } : e
+        e.id === entryId ? { ...e, searchStatus: 'error', error: err.message || '获取价格失败' } : e
       ));
     }
   }, [market]);
 
-  // Handle search input change with debounced fuzzy search
   const handleSearchInputChange = (entryId: string, value: string) => {
     setEntries(prev => prev.map(e =>
       e.id === entryId ? {
         ...e,
         searchQuery: value,
-        // Reset if user is typing again
         ticker: '',
         name: '',
         searchStatus: 'idle',
@@ -267,12 +254,10 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
       } : e
     ));
 
-    // Clear previous timer
     if (searchTimers.current[entryId]) {
       clearTimeout(searchTimers.current[entryId]);
     }
 
-    // Debounce fuzzy search (300ms)
     if (value.trim().length >= 1) {
       searchTimers.current[entryId] = setTimeout(() => {
         doFuzzySearch(entryId, value);
@@ -284,7 +269,6 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
     }
   };
 
-  // Select a stock from dropdown
   const handleSelectStock = (entryId: string, stock: SearchResult) => {
     setEntries(prev => prev.map(e =>
       e.id === entryId ? {
@@ -296,29 +280,19 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
         searchResults: [],
       } : e
     ));
-
-    // Immediately fetch price
     fetchPrice(entryId, stock.ticker);
   };
 
-  // Handle direct ticker input (user types exact code and presses Enter or blurs)
   const handleDirectSearch = (entryId: string) => {
     const entry = entries.find(e => e.id === entryId);
     if (!entry) return;
-
-    // If already found or no query, skip
     if (entry.searchStatus === 'found') return;
     if (!entry.searchQuery.trim()) return;
 
-    // If no ticker selected from dropdown, treat the query as a ticker code
     if (!entry.ticker) {
       const query = entry.searchQuery.trim().toUpperCase();
       setEntries(prev => prev.map(e =>
-        e.id === entryId ? {
-          ...e,
-          ticker: query,
-          showDropdown: false,
-        } : e
+        e.id === entryId ? { ...e, ticker: query, showDropdown: false } : e
       ));
       fetchPrice(entryId, query);
     }
@@ -341,27 +315,20 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
 
   const canSubmitStock = () => {
     return entries.some(e =>
-      e.ticker.trim() &&
-      e.shares &&
-      parseFloat(e.shares) > 0 &&
-      e.name.trim()
+      e.ticker.trim() && e.shares && parseFloat(e.shares) > 0 && e.name.trim()
     );
   };
 
-  const isCrypto = category === 'crypto';
-
   const canSubmit = () => {
-    if (isStock) {
-      return canSubmitStock();
-    } else if (isCrypto) {
+    if (isStock) return canSubmitStock();
+    if (isCrypto) {
       if (!cryptoSymbol.trim()) return false;
       if (!amount || parseFloat(amount) <= 0) return false;
       return true;
-    } else {
-      if (!name.trim()) return false;
-      if (!amount || parseFloat(amount) <= 0) return false;
-      return true;
     }
+    if (!name.trim()) return false;
+    if (!amount || parseFloat(amount) <= 0) return false;
+    return true;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -375,7 +342,6 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
 
       for (const entry of validEntries) {
         const fullSymbol = `${entry.ticker.toUpperCase()}.${market}`;
-
         const assetData: Omit<StockAsset, 'id' | 'createdAt' | 'updatedAt'> = {
           category: 'stock',
           name: entry.name.trim(),
@@ -396,18 +362,14 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
           addAsset(assetData);
         }
 
-        // Update price store if we have a price
         if (entry.price) {
           updateStockPrice(fullSymbol, entry.price, entry.priceAsOf || new Date().toISOString());
         }
-
-        // If price wasn't fetched yet, fetch in background
         if (entry.searchStatus !== 'found') {
           fetchSingle(fullSymbol).catch(() => {});
         }
       }
-    } else if (category === 'crypto') {
-      // Crypto asset with symbol for live pricing
+    } else if (isCrypto) {
       const sym = cryptoSymbol.trim().toUpperCase();
       const assetData = {
         category: 'crypto' as const,
@@ -426,8 +388,6 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
       } else {
         addAsset(assetData);
       }
-
-      // Fetch price in background if not yet fetched
       if (!cryptoPrice) {
         fetchCryptoSingle(sym).catch(() => {});
       }
@@ -451,488 +411,427 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
     onClose();
   };
 
+  // --- Shared sub-components ---
+
+  const LiquidityField = () => (
+    <div className="space-y-2">
+      <Label className="text-xs text-muted-foreground">流动性</Label>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        value={liquidity}
+        onValueChange={(v) => { if (v) setLiquidity(v as Liquidity); }}
+        className="w-full"
+      >
+        {LIQUIDITY_OPTIONS.map((opt) => (
+          <ToggleGroupItem
+            key={opt.value}
+            value={opt.value}
+            className="flex-1 text-xs data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary"
+          >
+            {opt.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  );
+
+  const NoteField = () => (
+    <div className="space-y-2">
+      <Label className="text-xs text-muted-foreground">备注（可选）</Label>
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="补充说明..."
+      />
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto p-0 gap-0">
-        <DialogHeader className="p-5 pb-4 border-b border-border">
-          <DialogTitle>{isEditing ? '编辑资产' : '新增资产'}</DialogTitle>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4">
+          <DialogTitle className="text-lg">{isEditing ? '编辑资产' : '新增资产'}</DialogTitle>
         </DialogHeader>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Category */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">类别</label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => setCategory(cat.key)}
-                  className={cn(
-                    'px-2 py-1.5 rounded-lg text-xs font-medium transition-all border',
-                    category === cat.key
-                      ? 'border-transparent text-white shadow-sm'
-                      : 'border-border text-muted-foreground hover:bg-accent'
-                  )}
-                  style={category === cat.key ? { backgroundColor: cat.color } : {}}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <Separator />
 
-          {/* Stock fields - multi-stock UI with fuzzy search */}
-          {isStock ? (
-            <>
-              {/* Market dropdown */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">市场</label>
-                <select
-                  value={market}
-                  onChange={(e) => {
-                    setMarket(e.target.value as Market);
-                    if (!isEditing) {
-                      setEntries([createEmptyEntry()]);
-                    }
-                  }}
-                  disabled={isEditing}
-                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                >
-                  {MARKETS.map(m => (
-                    <option key={m.value} value={m.value}>
-                      {m.label} ({m.currency})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Stock entries list */}
-              <div className="space-y-3">
-                <label className="text-xs font-medium text-muted-foreground block">
-                  股票列表
-                </label>
-
-                {entries.map((entry, idx) => (
-                  <div key={entry.id} className="rounded-xl border border-border bg-accent/30 p-3 space-y-2">
-                    {/* Row 1: Search input with dropdown */}
-                    <div className="flex gap-2 items-center">
-                      <div
-                        ref={(el) => { dropdownRefs.current[entry.id] = el; }}
-                        className="relative flex-1"
-                      >
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                        <input
-                          type="text"
-                          value={entry.searchQuery}
-                          onChange={(e) => handleSearchInputChange(entry.id, e.target.value)}
-                          onFocus={() => {
-                            if (entry.searchResults.length > 0) {
-                              setEntries(prev => prev.map(e =>
-                                e.id === entry.id ? { ...e, showDropdown: true } : e
-                              ));
-                            }
-                          }}
-                          onBlur={() => {
-                            // Delay to allow click on dropdown item
-                            setTimeout(() => handleDirectSearch(entry.id), 200);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleDirectSearch(entry.id);
-                            }
-                          }}
-                          placeholder={marketInfo.placeholder}
-                          className="w-full pl-8 pr-12 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">
-                          {entry.isSearching ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            marketInfo.suffix
-                          )}
-                        </span>
-
-                        {/* Fuzzy search dropdown */}
-                        {entry.showDropdown && entry.searchResults.length > 0 && (
-                          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                            {entry.searchResults.map((result) => (
-                              <button
-                                key={result.ticker}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault(); // prevent blur
-                                  handleSelectStock(entry.id, result);
-                                }}
-                                className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center gap-2 border-b border-border/50 last:border-0"
-                              >
-                                <span className="text-xs font-mono font-semibold text-warm-orange min-w-[60px]">
-                                  {result.ticker}
-                                </span>
-                                <span className="text-sm text-foreground truncate flex-1">
-                                  {result.name}
-                                </span>
-                                {result.nameEn && (
-                                  <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
-                                    {result.nameEn}
-                                  </span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {entries.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeEntry(entry.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Search status indicator */}
-                    {entry.searchStatus === 'searching' && (
-                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted/50">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">正在获取 {entry.ticker}{marketInfo.suffix} 的价格...</span>
-                      </div>
-                    )}
-
-                    {/* Found result - show name + price */}
-                    {entry.searchStatus === 'found' && (
-                      <div className="rounded-lg bg-sage-green/5 border border-sage-green/20 p-2 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Check className="w-3.5 h-3.5 text-sage-green flex-shrink-0" />
-                          <span className="text-xs font-medium text-foreground truncate">
-                            {entry.ticker}{marketInfo.suffix} · {entry.name}
-                          </span>
-                          <span className="text-xs text-sage-green font-mono ml-auto flex-shrink-0">
-                            {marketInfo.currency} {entry.price?.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        {entry.shares && parseFloat(entry.shares) > 0 && entry.price && (
-                          <div className="text-[11px] text-muted-foreground pl-5">
-                            市值 ≈ {marketInfo.currency} {(entry.price * parseFloat(entry.shares)).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Not found / error */}
-                    {(entry.searchStatus === 'not_found' || entry.searchStatus === 'error') && (
-                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-destructive/5">
-                        <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
-                        <span className="text-xs text-destructive">{entry.error || '未找到该股票'}</span>
-                        <button
-                          type="button"
-                          onClick={() => fetchPrice(entry.id, entry.ticker || entry.searchQuery)}
-                          className="ml-auto text-xs text-warm-orange hover:underline"
-                        >
-                          重试
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Row 2: Shares input (name is auto-filled from search) */}
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={entry.name}
-                        onChange={(e) => updateEntry(entry.id, 'name', e.target.value)}
-                        placeholder="名称（选择后自动填充）"
-                        className={cn(
-                          "flex-1 px-3 py-1.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30",
-                          entry.searchStatus === 'found'
-                            ? 'border-sage-green/30 text-foreground'
-                            : 'border-border'
-                        )}
-                      />
-                      <input
-                        type="number"
-                        value={entry.shares}
-                        onChange={(e) => updateEntry(entry.id, 'shares', e.target.value)}
-                        placeholder="股数"
-                        min="0"
-                        step="any"
-                        className="w-24 px-3 py-1.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {/* Add more button */}
-                {!isEditing && (
+        <ScrollArea className="max-h-[calc(85vh-8rem)]">
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+            {/* Category Selection */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">类别</Label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {CATEGORIES.map((cat) => (
                   <button
+                    key={cat.key}
                     type="button"
-                    onClick={addEntry}
-                    className="w-full py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:border-warm-orange hover:text-warm-orange transition-colors flex items-center justify-center gap-1.5"
+                    onClick={() => setCategory(cat.key)}
+                    className={cn(
+                      'px-2 py-2 rounded-md text-xs font-medium transition-all border',
+                      category === cat.key
+                        ? 'border-transparent text-white shadow-sm'
+                        : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                    style={category === cat.key ? { backgroundColor: cat.color } : {}}
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    再添加一只{marketInfo.label}
+                    {cat.label}
                   </button>
-                )}
+                ))}
               </div>
+            </div>
 
-              {/* Liquidity for stocks */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">流动性</label>
-                <div className="flex gap-2">
-                  {(['high', 'medium', 'low'] as Liquidity[]).map((l) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => setLiquidity(l)}
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors',
-                        liquidity === l
-                          ? 'bg-sage-green/10 border-sage-green text-sage-green'
-                          : 'border-border text-muted-foreground hover:bg-accent'
-                      )}
-                    >
-                      {l === 'high' ? '高' : l === 'medium' ? '中' : '低'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Note for stocks */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">备注（可选）</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="补充说明..."
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-            </>
-          ) : isCrypto ? (
-            <>
-              {/* Crypto symbol input */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">币种符号</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={cryptoSymbol}
-                    onChange={(e) => {
-                      const val = e.target.value.toUpperCase();
-                      setCryptoSymbol(val);
-                      setCryptoPriceError(null);
-                      // Debounce auto-fetch
-                      if (cryptoTimer.current) clearTimeout(cryptoTimer.current);
-                      if (val.trim().length >= 2) {
-                        setCryptoPriceLoading(true);
-                        cryptoTimer.current = setTimeout(async () => {
-                          try {
-                            const input = JSON.stringify({ json: { symbols: [val.trim()] } });
-                            const res = await fetch(`/api/trpc/market.getCryptoPrices?input=${encodeURIComponent(input)}`, { credentials: 'include' });
-                            const json = await res.json();
-                            const data = json?.result?.data?.json;
-                            if (data?.prices?.[val.trim()]) {
-                              setCryptoPrice(data.prices[val.trim()].price);
-                              setCryptoPriceError(null);
-                            } else if (data?.errors?.[val.trim()]) {
-                              setCryptoPrice(null);
-                              setCryptoPriceError(data.errors[val.trim()]);
-                            } else {
-                              setCryptoPrice(null);
-                              setCryptoPriceError('未找到该币种');
-                            }
-                          } catch {
-                            setCryptoPrice(null);
-                            setCryptoPriceError('网络错误');
-                          } finally {
-                            setCryptoPriceLoading(false);
-                          }
-                        }, 600);
-                      } else {
-                        setCryptoPrice(null);
-                        setCryptoPriceLoading(false);
-                      }
+            {/* ========== STOCK FIELDS ========== */}
+            {isStock ? (
+              <>
+                {/* Market Select */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">市场</Label>
+                  <Select
+                    value={market}
+                    onValueChange={(v) => {
+                      setMarket(v as Market);
+                      if (!isEditing) setEntries([createEmptyEntry()]);
                     }}
-                    placeholder="BTC / ETH / SOL / DOGE ..."
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                  />
-                  {cryptoPriceLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                    disabled={isEditing}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARKETS.map(m => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label} ({m.currency})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Stock Entries */}
+                <div className="space-y-3">
+                  <Label className="text-xs text-muted-foreground">股票列表</Label>
+
+                  {entries.map((entry) => (
+                    <div key={entry.id} className="rounded-lg border border-input bg-muted/30 p-3 space-y-2.5">
+                      {/* Search input */}
+                      <div className="flex gap-2 items-center">
+                        <div
+                          ref={(el) => { dropdownRefs.current[entry.id] = el; }}
+                          className="relative flex-1"
+                        >
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          <Input
+                            value={entry.searchQuery}
+                            onChange={(e) => handleSearchInputChange(entry.id, e.target.value)}
+                            onFocus={() => {
+                              if (entry.searchResults.length > 0) {
+                                setEntries(prev => prev.map(e =>
+                                  e.id === entry.id ? { ...e, showDropdown: true } : e
+                                ));
+                              }
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => handleDirectSearch(entry.id), 200);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleDirectSearch(entry.id);
+                              }
+                            }}
+                            placeholder={marketInfo.placeholder}
+                            className="pl-8 pr-12"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono pointer-events-none">
+                            {entry.isSearching ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              marketInfo.suffix
+                            )}
+                          </span>
+
+                          {/* Search dropdown */}
+                          {entry.showDropdown && entry.searchResults.length > 0 && (
+                            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover text-popover-foreground border border-border rounded-md shadow-md max-h-48 overflow-y-auto">
+                              {entry.searchResults.map((result) => (
+                                <button
+                                  key={result.ticker}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleSelectStock(entry.id, result);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground transition-colors flex items-center gap-2 border-b border-border/50 last:border-0"
+                                >
+                                  <Badge variant="outline" className="font-mono text-[11px] shrink-0">
+                                    {result.ticker}
+                                  </Badge>
+                                  <span className="text-sm truncate flex-1">
+                                    {result.name}
+                                  </span>
+                                  {result.nameEn && (
+                                    <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
+                                      {result.nameEn}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {entries.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeEntry(entry.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Status indicators */}
+                      {entry.searchStatus === 'searching' && (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">正在获取 {entry.ticker}{marketInfo.suffix} 的价格...</span>
+                        </div>
+                      )}
+
+                      {entry.searchStatus === 'found' && (
+                        <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                            <span className="text-xs font-medium text-foreground truncate">
+                              {entry.ticker}{marketInfo.suffix} · {entry.name}
+                            </span>
+                            <span className="text-xs text-primary font-mono ml-auto flex-shrink-0">
+                              {marketInfo.currency} {entry.price?.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          {entry.shares && parseFloat(entry.shares) > 0 && entry.price && (
+                            <div className="text-[11px] text-muted-foreground pl-5">
+                              市值 ≈ {marketInfo.currency} {(entry.price * parseFloat(entry.shares)).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {(entry.searchStatus === 'not_found' || entry.searchStatus === 'error') && (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/5 border border-destructive/20">
+                          <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                          <span className="text-xs text-destructive">{entry.error || '未找到该股票'}</span>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="ml-auto h-auto p-0 text-xs"
+                            onClick={() => fetchPrice(entry.id, entry.ticker || entry.searchQuery)}
+                          >
+                            重试
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Name + Shares */}
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          value={entry.name}
+                          onChange={(e) => updateEntry(entry.id, 'name', e.target.value)}
+                          placeholder="名称（选择后自动填充）"
+                          className={cn(
+                            "flex-1",
+                            entry.searchStatus === 'found' && 'border-primary/30'
+                          )}
+                        />
+                        <Input
+                          type="number"
+                          value={entry.shares}
+                          onChange={(e) => updateEntry(entry.id, 'shares', e.target.value)}
+                          placeholder="股数"
+                          min="0"
+                          step="any"
+                          className="w-24"
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add more button */}
+                  {!isEditing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-dashed text-muted-foreground hover:text-foreground"
+                      onClick={addEntry}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                      再添加一只{marketInfo.label}
+                    </Button>
                   )}
                 </div>
-                {/* Price display */}
-                {cryptoPrice !== null && (
-                  <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sage-green/5 border border-sage-green/20">
-                    <Check className="w-3.5 h-3.5 text-sage-green flex-shrink-0" />
-                    <span className="text-xs text-sage-green font-medium">
-                      {cryptoSymbol} · USD {cryptoPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-                {cryptoPriceError && (
-                  <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-destructive/5">
-                    <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
-                    <span className="text-xs text-destructive">{cryptoPriceError}</span>
-                  </div>
-                )}
-              </div>
 
-              {/* Name (optional, defaults to symbol) */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">名称（可选）</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={cryptoSymbol ? `默认: ${cryptoSymbol}` : '如：比特币'}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-
-              {/* Amount (number of coins) */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">持有数量</label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.5"
-                  min="0"
-                  step="any"
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-                {cryptoPrice && amount && parseFloat(amount) > 0 && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    市值 ≈ USD {(cryptoPrice * parseFloat(amount)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                <LiquidityField />
+                <NoteField />
+              </>
+            ) : isCrypto ? (
+              <>
+                {/* Crypto Symbol */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">币种符号</Label>
+                  <div className="relative">
+                    <Input
+                      value={cryptoSymbol}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setCryptoSymbol(val);
+                        setCryptoPriceError(null);
+                        if (cryptoTimer.current) clearTimeout(cryptoTimer.current);
+                        if (val.trim().length >= 2) {
+                          setCryptoPriceLoading(true);
+                          cryptoTimer.current = setTimeout(async () => {
+                            try {
+                              const input = JSON.stringify({ json: { symbols: [val.trim()] } });
+                              const res = await fetch(`/api/trpc/market.getCryptoPrices?input=${encodeURIComponent(input)}`, { credentials: 'include' });
+                              const json = await res.json();
+                              const data = json?.result?.data?.json;
+                              if (data?.prices?.[val.trim()]) {
+                                setCryptoPrice(data.prices[val.trim()].price);
+                                setCryptoPriceError(null);
+                              } else if (data?.errors?.[val.trim()]) {
+                                setCryptoPrice(null);
+                                setCryptoPriceError(data.errors[val.trim()]);
+                              } else {
+                                setCryptoPrice(null);
+                                setCryptoPriceError('未找到该币种');
+                              }
+                            } catch {
+                              setCryptoPrice(null);
+                              setCryptoPriceError('网络错误');
+                            } finally {
+                              setCryptoPriceLoading(false);
+                            }
+                          }, 600);
+                        } else {
+                          setCryptoPrice(null);
+                          setCryptoPriceLoading(false);
+                        }
+                      }}
+                      placeholder="BTC / ETH / SOL / DOGE ..."
+                      className="font-mono uppercase pr-10"
+                    />
+                    {cryptoPriceLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                    )}
                   </div>
-                )}
-              </div>
-
-              {/* Liquidity */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">流动性</label>
-                <div className="flex gap-2">
-                  {(['high', 'medium', 'low'] as Liquidity[]).map((l) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => setLiquidity(l)}
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors',
-                        liquidity === l
-                          ? 'bg-sage-green/10 border-sage-green text-sage-green'
-                          : 'border-border text-muted-foreground hover:bg-accent'
-                      )}
-                    >
-                      {l === 'high' ? '高' : l === 'medium' ? '中' : '低'}
-                    </button>
-                  ))}
+                  {cryptoPrice !== null && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/5 border border-primary/20">
+                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                      <span className="text-xs text-primary font-medium">
+                        {cryptoSymbol} · USD {cryptoPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  {cryptoPriceError && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/5 border border-destructive/20">
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                      <span className="text-xs text-destructive">{cryptoPriceError}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* Note */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">备注（可选）</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="补充说明..."
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Name for other categories */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">名称</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="如：工商银行活期"
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">金额</label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="10000"
-                  min="0"
-                  step="any"
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">币种</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value as Currency)}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.symbol} {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Liquidity */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">流动性</label>
-                <div className="flex gap-2">
-                  {(['high', 'medium', 'low'] as Liquidity[]).map((l) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => setLiquidity(l)}
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors',
-                        liquidity === l
-                          ? 'bg-sage-green/10 border-sage-green text-sage-green'
-                          : 'border-border text-muted-foreground hover:bg-accent'
-                      )}
-                    >
-                      {l === 'high' ? '高' : l === 'medium' ? '中' : '低'}
-                    </button>
-                  ))}
+                {/* Name */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">名称（可选）</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={cryptoSymbol ? `默认: ${cryptoSymbol}` : '如：比特币'}
+                  />
                 </div>
-              </div>
 
-              {/* Note */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">备注（可选）</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="补充说明..."
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-                />
-              </div>
-            </>
-          )}
+                {/* Amount */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">持有数量</Label>
+                  <Input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.5"
+                    min="0"
+                    step="any"
+                  />
+                  {cryptoPrice && amount && parseFloat(amount) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      市值 ≈ USD {(cryptoPrice * parseFloat(amount)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                    </p>
+                  )}
+                </div>
 
-          {/* Submit */}
-          <Button
-            type="submit"
-            disabled={!canSubmit()}
-            className="w-full"
-          >
-            {isEditing ? '保存修改' : isStock ? `添加 ${entries.filter(e => e.ticker.trim() && e.name.trim() && e.shares).length} 只股票` : '添加资产'}
-          </Button>
-        </form>
+                <LiquidityField />
+                <NoteField />
+              </>
+            ) : (
+              <>
+                {/* Name */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">名称</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="如：工商银行活期"
+                  />
+                </div>
+
+                {/* Amount */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">金额</Label>
+                  <Input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="10000"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+
+                {/* Currency */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">币种</Label>
+                  <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.symbol} {c.name} ({c.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <LiquidityField />
+                <NoteField />
+              </>
+            )}
+
+            {/* Submit */}
+            <Button
+              type="submit"
+              disabled={!canSubmit()}
+              className="w-full"
+              size="lg"
+            >
+              {isEditing ? '保存修改' : isStock ? `添加 ${entries.filter(e => e.ticker.trim() && e.name.trim() && e.shares).length} 只股票` : '添加资产'}
+            </Button>
+          </form>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

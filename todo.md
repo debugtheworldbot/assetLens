@@ -45,3 +45,13 @@
 - [x] 添加页面过渡动画和微交互效果
 - [x] 将 AssetFormModal 迁移为 shadcn Dialog 组件
 - [x] 添加深色/浅色主题切换功能
+- [x] 使用 shadcn CLI 安装所有需要的原生组件
+- [x] AssetFormModal 表单使用 shadcn Input/Select/Label 等原生组件
+- [x] 首页仪表盘统一使用 shadcn 原生组件
+- [x] 资产列表页统一使用 shadcn 原生组件
+- [x] 建议页统一使用 shadcn 原生组件
+- [x] 设置页统一使用 shadcn 原生组件
+- [x] 统一全局主题色和样式与 shadcn/ui 一致
+- [x] 用 shadcn CLI 安装/补齐缺失组件（AlertDialog 等）
+- [x] 重构 Assets.tsx 空状态和操作区为 shadcn 原生组件
+- [x] 重构 Settings.tsx 确认弹窗为 shadcn AlertDialog

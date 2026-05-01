@@ -14,6 +14,16 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { motion } from 'framer-motion';
 
 const fadeInUp = {
@@ -33,6 +43,9 @@ export default function Settings() {
   const priceRefresh = usePriceStore((s) => s.refresh);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ count: number; state: any } | null>(null);
 
   const riskLabels = ['', '保守', '稳健', '平衡', '积极', '激进'];
 
@@ -44,7 +57,7 @@ export default function Settings() {
     toast.success('导出成功');
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -58,19 +71,8 @@ export default function Settings() {
         return;
       }
 
-      const confirmed = confirm(
-        `将替换当前 ${assets.length} 条资产为导入的 ${result.state!.assets.length} 条资产，是否继续？`
-      );
-
-      if (!confirmed) return;
-
-      importState(result.state!);
-      toast.success('导入成功');
-
-      setTimeout(() => {
-        fxRefresh();
-        priceRefresh();
-      }, 500);
+      setImportPreview({ count: result.state!.assets.length, state: result.state });
+      setShowImportDialog(true);
     } catch (err: any) {
       toast.error(`导入失败: ${err.message || '未知错误'}`);
     } finally {
@@ -79,12 +81,23 @@ export default function Settings() {
     }
   };
 
-  const handleClear = () => {
-    const confirmed = confirm('确定要清空所有数据吗？此操作不可恢复！');
-    if (confirmed) {
-      clearAll();
-      toast.success('数据已清空');
+  const handleImportConfirm = () => {
+    if (importPreview?.state) {
+      importState(importPreview.state);
+      toast.success('导入成功');
+      setTimeout(() => {
+        fxRefresh();
+        priceRefresh();
+      }, 500);
     }
+    setShowImportDialog(false);
+    setImportPreview(null);
+  };
+
+  const handleClearConfirm = () => {
+    clearAll();
+    toast.success('数据已清空');
+    setShowClearDialog(false);
   };
 
   return (
@@ -213,7 +226,7 @@ export default function Settings() {
               ref={fileInputRef}
               type="file"
               accept=".json"
-              onChange={handleImport}
+              onChange={handleFileSelect}
               className="hidden"
             />
 
@@ -222,7 +235,7 @@ export default function Settings() {
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-auto py-3 border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50"
-              onClick={handleClear}
+              onClick={() => setShowClearDialog(true)}
             >
               <Trash2 className="w-4 h-4 text-destructive" />
               <div className="text-left">
@@ -255,6 +268,45 @@ export default function Settings() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Clear Data AlertDialog */}
+      <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认清空数据</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作将删除所有 {assets.length} 项资产和全部设置，且不可恢复。建议先导出备份。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              确认清空
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Import Confirmation AlertDialog */}
+      <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入数据</AlertDialogTitle>
+            <AlertDialogDescription>
+              将替换当前 {assets.length} 条资产为导入的 {importPreview?.count || 0} 条资产，是否继续？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setImportPreview(null)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImportConfirm}>
+              确认导入
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

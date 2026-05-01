@@ -2,11 +2,13 @@ import { useAssetStore } from '@/store/useAssetStore';
 import { useFxStore } from '@/store/useFxStore';
 import { usePriceCache } from '@/hooks/usePriceCache';
 import { generateAdvice, THRESHOLDS } from '@/lib/advice';
-import { Shield, AlertTriangle, Info } from 'lucide-react';
+import { Shield, AlertTriangle, Info, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { motion } from 'framer-motion';
 
 const fadeInUp = {
@@ -73,10 +75,13 @@ export default function Advice() {
                 </span>
               ))}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
-              <Info className="w-3 h-3" />
-              <span>风险资产上限: {THRESHOLDS.RISK_CAPS[settings.riskLevel]}%</span>
-            </div>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle className="text-xs">风险资产上限: {THRESHOLDS.RISK_CAPS[settings.riskLevel]}%</AlertTitle>
+              <AlertDescription className="text-xs">
+                调整风险等级会影响调仓建议的触发条件
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
       </motion.div>
@@ -85,14 +90,16 @@ export default function Advice() {
       {adviceItems.length === 0 ? (
         <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="w-14 h-14 rounded-2xl bg-sage-green/10 flex items-center justify-center mb-4">
-                <Shield className="w-7 h-7 text-sage-green" />
-              </div>
-              <h3 className="text-base font-medium text-sage-green mb-1">你的资产配置健康</h3>
-              <p className="text-sm text-muted-foreground text-center">
-                当前没有触发任何调仓建议，继续保持！
-              </p>
+            <CardContent className="py-12">
+              <Empty className="border-none">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon" className="bg-sage-green/10 text-sage-green">
+                    <Shield />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sage-green">你的资产配置健康</EmptyTitle>
+                  <EmptyDescription>当前没有触发任何调仓建议，继续保持！</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </CardContent>
           </Card>
         </motion.div>
@@ -142,8 +149,16 @@ export default function Advice() {
       {assets.length === 0 && (
         <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
           <Card>
-            <CardContent className="text-center py-8">
-              <p className="text-sm text-muted-foreground">请先添加资产，才能生成调仓建议</p>
+            <CardContent className="py-8">
+              <Empty className="border-none">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Wallet />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sm">请先添加资产</EmptyTitle>
+                  <EmptyDescription>添加资产后才能生成调仓建议</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </CardContent>
           </Card>
         </motion.div>

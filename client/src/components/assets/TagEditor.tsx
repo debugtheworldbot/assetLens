@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, Plus, Tag } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   tags: string[];
@@ -41,21 +43,22 @@ export default function TagEditor({ tags, onChange, suggestions = [], compact = 
 
   return (
     <div className="relative">
-      <div className={`flex flex-wrap items-center gap-1.5 ${compact ? 'min-h-[28px]' : 'min-h-[36px] p-2 border border-border rounded-lg bg-background'}`}>
+      <div className={`flex flex-wrap items-center gap-1.5 ${compact ? 'min-h-[28px]' : 'min-h-[36px] p-2 border border-input rounded-md bg-background shadow-xs focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px] transition-[color,box-shadow]'}`}>
         {tags.map(tag => (
-          <span
+          <Badge
             key={tag}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-warm-orange/10 text-warm-orange border border-warm-orange/20"
+            variant="secondary"
+            className="gap-1 pl-2 pr-1 py-0.5 text-xs"
           >
             <Tag className="w-2.5 h-2.5" />
             {tag}
             <button
               onClick={() => removeTag(tag)}
-              className="ml-0.5 hover:text-warm-orange/70 transition-colors"
+              className="ml-0.5 rounded-sm hover:bg-muted-foreground/20 p-0.5 transition-colors"
             >
               <X className="w-3 h-3" />
             </button>
-          </span>
+          </Badge>
         ))}
         <div className="relative flex-1 min-w-[80px]">
           <input
@@ -74,23 +77,26 @@ export default function TagEditor({ tags, onChange, suggestions = [], compact = 
           />
         </div>
         {!compact && (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-primary"
             onClick={() => inputRef.current?.focus()}
-            className="text-muted-foreground hover:text-warm-orange transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Suggestions dropdown */}
       {showSuggestions && filteredSuggestions.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-32 overflow-y-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover text-popover-foreground border border-border rounded-md shadow-md max-h-32 overflow-y-auto">
           {filteredSuggestions.map(suggestion => (
             <button
               key={suggestion}
               onClick={() => addTag(suggestion)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors flex items-center gap-2"
             >
               <Tag className="w-3 h-3 text-muted-foreground" />
               {suggestion}

@@ -14,6 +14,8 @@ import StockDonut from '@/components/charts/StockDonut';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
 
@@ -54,18 +56,22 @@ export default function Home() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-sand-gold/10 flex items-center justify-center mb-6">
-          <Wallet className="w-10 h-10 text-primary/60" />
-        </div>
-        <h2 className="text-xl font-semibold text-foreground mb-2">开始记录你的资产</h2>
-        <p className="text-muted-foreground text-sm mb-8 text-center max-w-xs">
-          添加第一笔资产，开启你的财务体检之旅
-        </p>
-        <Link href="/assets">
-          <Button size="lg" className="gap-2 shadow-lg shadow-primary/20">
-            添加资产 <ArrowRight className="w-4 h-4" />
-          </Button>
-        </Link>
+        <Empty className="border-none max-w-sm">
+          <EmptyHeader>
+            <EmptyMedia variant="icon" className="bg-primary/10 text-primary">
+              <Wallet />
+            </EmptyMedia>
+            <EmptyTitle>开始记录你的资产</EmptyTitle>
+            <EmptyDescription>添加第一笔资产，开启你的财务体检之旅</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Link href="/assets">
+              <Button size="lg" className="gap-2 shadow-lg shadow-primary/20">
+                添加资产 <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </EmptyContent>
+        </Empty>
       </motion.div>
     );
   }
@@ -137,7 +143,7 @@ export default function Home() {
               <div className="mt-4 w-full px-4">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>风险敞口</span>
-                  <span className="font-medium text-foreground">{formatPercentage(riskExposure)}</span>
+                  <span className="font-medium text-foreground font-mono tabular-nums">{formatPercentage(riskExposure)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 bg-muted rounded-full overflow-hidden">
                   <motion.div
@@ -224,12 +230,11 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               {adviceItems.length === 0 ? (
-                <div className="flex items-center gap-3 py-3">
-                  <div className="w-9 h-9 rounded-xl bg-sage-green/10 flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-sage-green" />
-                  </div>
-                  <p className="text-sm text-sage-green font-medium">你的资产配置健康</p>
-                </div>
+                <Alert>
+                  <Shield className="h-4 w-4 text-sage-green" />
+                  <AlertTitle className="text-sage-green">你的资产配置健康</AlertTitle>
+                  <AlertDescription>当前配置符合你的风险偏好，无需调整</AlertDescription>
+                </Alert>
               ) : (
                 <div className="space-y-2">
                   {adviceItems.slice(0, 3).map((item, index) => (

@@ -1,6 +1,8 @@
-import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Component, ReactNode } from "react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Props {
   children: ReactNode;
@@ -25,32 +27,32 @@ class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen p-8 bg-background">
-          <div className="flex flex-col items-center w-full max-w-2xl p-8">
-            <AlertTriangle
-              size={48}
-              className="text-destructive mb-6 flex-shrink-0"
-            />
+          <Card className="w-full max-w-2xl">
+            <CardContent className="flex flex-col items-center p-8 gap-6">
+              <div className="w-14 h-14 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-destructive" />
+              </div>
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>An unexpected error occurred</AlertTitle>
+                <AlertDescription>
+                  <pre className="mt-2 text-xs whitespace-break-spaces overflow-auto max-h-48 p-3 rounded-md bg-muted text-muted-foreground">
+                    {this.state.error?.stack}
+                  </pre>
+                </AlertDescription>
+              </Alert>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
-              </pre>
-            </div>
-
-            <button
-              onClick={() => window.location.reload()}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 cursor-pointer"
-              )}
-            >
-              <RotateCcw size={16} />
-              Reload Page
-            </button>
-          </div>
+              <Button
+                onClick={() => window.location.reload()}
+                variant="outline"
+                className="gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reload Page
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       );
     }

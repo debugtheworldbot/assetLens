@@ -8,7 +8,7 @@ import { getCategorySummaries } from '@/lib/analytics';
 import { formatCurrency, formatTimeAgo } from '@/lib/format';
 import { getCategoryLabel, getCategoryColor, CATEGORIES } from '@/lib/categories';
 import { Asset, Category, StockAsset } from '@/lib/types';
-import { Plus, Search, Pencil, Trash2, AlertTriangle, Tag } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, AlertTriangle, Tag, Wallet } from 'lucide-react';
 import TagEditor from '@/components/assets/TagEditor';
 import { assignStockColors } from '@/lib/stockColors';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Assets() {
@@ -32,6 +44,7 @@ export default function Assets() {
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const updateAssetTags = useAssetStore((s) => s.updateAssetTags);
 
   const filteredAssets = useMemo(() => {
@@ -61,9 +74,10 @@ export default function Assets() {
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('确定要删除这项资产吗？')) {
-      deleteAsset(id);
+  const handleDeleteConfirm = () => {
+    if (deleteTarget) {
+      deleteAsset(deleteTarget.id);
+      setDeleteTarget(null);
     }
   };
 
@@ -150,165 +164,217 @@ export default function Assets() {
       {/* Asset List */}
       {filteredAssets.length === 0 ? (
         <motion.div
-          className="flex flex-col items-center justify-center py-16"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          <p className="text-muted-foreground text-sm">
-            {assets.length === 0 ? '还没有资产，点击上方"新增"开始记录' : '没有匹配的资产'}
-          </p>
+          <Empty className="py-16 border-none">
+            <EmptyHeader>
+              <EmptyMedia variant="icon" className={assets.length === 0 ? 'bg-primary/10 text-primary' : ''}>
+                <Wallet />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm">
+                {assets.length === 0 ? '还没有资产' : '没有匹配的资产'}
+              </EmptyTitle>
+              <EmptyDescription>
+                {assets.length === 0
+                  ? '点击上方"新增"按钮开始记录你的资产'
+                  : '尝试调整搜索关键词或筛选条件'}
+              </EmptyDescription>
+            </EmptyHeader>
+            {assets.length === 0 && (
+              <EmptyContent>
+                <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5">
+                  <Plus className="w-4 h-4" />
+                  添加第一笔资产
+                </Button>
+              </EmptyContent>
+            )}
+          </Empty>
         </motion.div>
       ) : (
-        <div className="space-y-2">
-          <AnimatePresence mode="popLayout">
-            {filteredAssets.map((asset, index) => {
-              const valueInOriginal = getAssetValueInOriginalCurrency(asset, priceCache);
-              const valueInBase = getAssetValueInBaseCurrency(asset, settings.baseCurrency, rates, priceCache);
-              const isStock = asset.category === 'stock';
-              const stockAsset = isStock ? (asset as StockAsset) : null;
-              const hasError = isStock && stockAsset?.pricingError;
+        <TooltipProvider delayDuration={300}>
+          <div className="space-y-2">
+            <AnimatePresence mode="popLayout">
+              {filteredAssets.map((asset, index) => {
+                const valueInOriginal = getAssetValueInOriginalCurrency(asset, priceCache);
+                const valueInBase = getAssetValueInBaseCurrency(asset, settings.baseCurrency, rates, priceCache);
+                const isStock = asset.category === 'stock';
+                const stockAsset = isStock ? (asset as StockAsset) : null;
+                const hasError = isStock && stockAsset?.pricingError;
 
-              return (
-                <motion.div
-                  key={asset.id}
-                  layout
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.25, delay: index * 0.03 }}
-                >
-                  <Card className="hover:shadow-md transition-shadow duration-200 group">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        {/* Category dot */}
-                        <div
-                          className="w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0"
-                          style={{
-                            backgroundColor: isStock
-                              ? (stockColorMap[asset.id] || getCategoryColor(asset.category))
-                              : getCategoryColor(asset.category),
-                          }}
-                        />
+                return (
+                  <motion.div
+                    key={asset.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.25, delay: index * 0.03 }}
+                  >
+                    <Card className="hover:shadow-md transition-shadow duration-200 group">
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Category dot */}
+                          <div
+                            className="w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0"
+                            style={{
+                              backgroundColor: isStock
+                                ? (stockColorMap[asset.id] || getCategoryColor(asset.category))
+                                : getCategoryColor(asset.category),
+                            }}
+                          />
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-medium text-foreground truncate">{asset.name}</h3>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
-                              {getCategoryLabel(asset.category)}
-                            </Badge>
-                          </div>
-
-                          {isStock && stockAsset ? (
-                            <div className="mt-1">
-                              <p className="text-xs text-muted-foreground font-mono">
-                                {stockAsset.symbol} · {stockAsset.shares} 股
-                                {stockAsset.lastPrice && (
-                                  <> × {formatCurrency(stockAsset.lastPrice, stockAsset.currency)}</>
-                                )}
-                              </p>
-                              {hasError && (
-                                <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
-                                  <AlertTriangle className="w-3 h-3" /> 无法获取报价
-                                </p>
-                              )}
-                              {stockAsset.lastPriceAt && !hasError && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  价格更新: {formatTimeAgo(stockAsset.lastPriceAt)}
-                                </p>
-                              )}
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-medium text-foreground truncate">{asset.name}</h3>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                                {getCategoryLabel(asset.category)}
+                              </Badge>
                             </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground mt-1 font-mono">
-                              {formatCurrency(valueInOriginal, asset.currency)}
-                            </p>
-                          )}
 
-                          {/* Tags */}
-                          <div className="mt-2 flex items-center gap-1 flex-wrap">
-                            {asset.tags && asset.tags.length > 0 ? (
-                              asset.tags.map(tag => (
-                                <Badge
-                                  key={tag}
-                                  variant="outline"
-                                  className="text-[10px] px-1.5 py-0 h-4 font-normal border-primary/20 text-primary/80"
+                            {isStock && stockAsset ? (
+                              <div className="mt-1">
+                                <p className="text-xs text-muted-foreground font-mono">
+                                  {stockAsset.symbol} · {stockAsset.shares} 股
+                                  {stockAsset.lastPrice && (
+                                    <> × {formatCurrency(stockAsset.lastPrice, stockAsset.currency)}</>
+                                  )}
+                                </p>
+                                {hasError && (
+                                  <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
+                                    <AlertTriangle className="w-3 h-3" /> 无法获取报价
+                                  </p>
+                                )}
+                                {stockAsset.lastPriceAt && !hasError && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    价格更新: {formatTimeAgo(stockAsset.lastPriceAt)}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground mt-1 font-mono">
+                                {formatCurrency(valueInOriginal, asset.currency)}
+                              </p>
+                            )}
+
+                            {/* Tags */}
+                            <div className="mt-2 flex items-center gap-1 flex-wrap">
+                              {asset.tags && asset.tags.length > 0 ? (
+                                asset.tags.map(tag => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 font-normal border-primary/20 text-primary/80"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))
+                              ) : null}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingTagsId(editingTagsId === asset.id ? null : asset.id)}
+                                className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-primary"
+                              >
+                                <Tag className="w-2.5 h-2.5 mr-0.5" />
+                                {asset.tags && asset.tags.length > 0 ? '编辑' : '标签'}
+                              </Button>
+                            </div>
+
+                            {/* Inline Tag Editor */}
+                            <AnimatePresence>
+                              {editingTagsId === asset.id && (
+                                <motion.div
+                                  className="mt-2"
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
                                 >
-                                  {tag}
-                                </Badge>
-                              ))
-                            ) : null}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setEditingTagsId(editingTagsId === asset.id ? null : asset.id)}
-                              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-primary"
-                            >
-                              <Tag className="w-2.5 h-2.5 mr-0.5" />
-                              {asset.tags && asset.tags.length > 0 ? '编辑' : '标签'}
-                            </Button>
+                                  <TagEditor
+                                    tags={asset.tags || []}
+                                    onChange={(tags) => updateAssetTags(asset.id, tags)}
+                                    suggestions={allTags}
+                                  />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
 
-                          {/* Inline Tag Editor */}
-                          <AnimatePresence>
-                            {editingTagsId === asset.id && (
-                              <motion.div
-                                className="mt-2"
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <TagEditor
-                                  tags={asset.tags || []}
-                                  onChange={(tags) => updateAssetTags(asset.id, tags)}
-                                  suggestions={allTags}
-                                />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-
-                        {/* Value */}
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-foreground font-mono tabular-nums">
-                            {formatCurrency(valueInBase, settings.baseCurrency, true)}
-                          </p>
-                          {asset.currency !== settings.baseCurrency && (
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                              ({formatCurrency(valueInOriginal, asset.currency, true)})
+                          {/* Value */}
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-sm font-semibold text-foreground font-mono tabular-nums">
+                              {formatCurrency(valueInBase, settings.baseCurrency, true)}
                             </p>
-                          )}
-                        </div>
+                            {asset.currency !== settings.baseCurrency && (
+                              <p className="text-[10px] text-muted-foreground font-mono">
+                                ({formatCurrency(valueInOriginal, asset.currency, true)})
+                              </p>
+                            )}
+                          </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleEdit(asset)}
-                          >
-                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 hover:text-destructive"
-                            onClick={() => handleDelete(asset.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {/* Actions */}
+                          <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => handleEdit(asset)}
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">编辑</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 hover:text-destructive"
+                                  onClick={() => setDeleteTarget({ id: asset.id, name: asset.name })}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">删除</TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </TooltipProvider>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除「{deleteTarget?.name}」吗？此操作不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Asset Form Modal */}
       <AssetFormModal

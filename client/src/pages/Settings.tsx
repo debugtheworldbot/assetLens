@@ -5,9 +5,21 @@ import { usePriceStore } from '@/store/usePriceStore';
 import { CURRENCIES } from '@/lib/currencies';
 import { Currency } from '@/lib/types';
 import { exportData, downloadJson, readJsonFile, validateImportData } from '@/lib/importExport';
-import { Download, Upload, Trash2, Globe, Shield, Database } from 'lucide-react';
+import { Download, Upload, Trash2, Globe, Shield, Database, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { motion } from 'framer-motion';
+
+const fadeInUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+};
 
 export default function Settings() {
   const settings = useAssetStore((s) => s.settings);
@@ -55,7 +67,6 @@ export default function Settings() {
       importState(result.state!);
       toast.success('导入成功');
 
-      // Refresh rates and prices
       setTimeout(() => {
         fxRefresh();
         priceRefresh();
@@ -77,132 +88,173 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-20 md:pb-6">
+    <motion.div
+      className="max-w-2xl mx-auto space-y-5 pb-20 md:pb-6"
+      initial="initial"
+      animate="animate"
+      variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
+    >
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">设置</h1>
+      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
+        <h1 className="text-xl font-semibold text-foreground">设置</h1>
         <p className="text-sm text-muted-foreground mt-1">管理你的偏好和数据</p>
-      </div>
+      </motion.div>
 
       {/* Base Currency */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <Globe className="w-4 h-4 text-sage-green" />
-          <h3 className="text-sm font-semibold text-foreground">基准币种</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">所有资产将换算为此币种显示总计</p>
-        <select
-          value={settings.baseCurrency}
-          onChange={(e) => setBaseCurrency(e.target.value as Currency)}
-          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.symbol} {c.name} ({c.code})
-            </option>
-          ))}
-        </select>
-      </div>
+      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Globe className="w-4 h-4 text-sage-green" />
+              基准币种
+            </CardTitle>
+            <CardDescription className="text-xs">
+              所有资产将换算为此币种显示总计
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={settings.baseCurrency}
+              onValueChange={(val) => setBaseCurrency(val as Currency)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.symbol} {c.name} ({c.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Risk Level */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-4 h-4 text-sage-green" />
-          <h3 className="text-sm font-semibold text-foreground">风险等级</h3>
-          <span className="ml-auto text-sm font-bold text-warm-orange">
-            R{settings.riskLevel} · {riskLabels[settings.riskLevel]}
-          </span>
-        </div>
-        <input
-          type="range"
-          min="1"
-          max="5"
-          value={settings.riskLevel}
-          onChange={(e) => setRiskLevel(parseInt(e.target.value) as 1 | 2 | 3 | 4 | 5)}
-          className="w-full h-2 rounded-full appearance-none cursor-pointer"
-          style={{
-            background: `linear-gradient(to right, #5b9b7d, #d4a559, #e57c5a)`,
-          }}
-        />
-        <div className="flex justify-between mt-2">
-          {[1, 2, 3, 4, 5].map((level) => (
-            <span
-              key={level}
-              className={cn(
-                'text-[10px] font-medium',
-                settings.riskLevel === level ? 'text-warm-orange' : 'text-muted-foreground'
-              )}
-            >
-              R{level} {riskLabels[level]}
-            </span>
-          ))}
-        </div>
-      </div>
+      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Shield className="w-4 h-4 text-sage-green" />
+                风险等级
+              </CardTitle>
+              <Badge variant="outline" className="font-mono text-xs">
+                R{settings.riskLevel} · {riskLabels[settings.riskLevel]}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Slider
+              value={[settings.riskLevel]}
+              onValueChange={([val]) => setRiskLevel(val as 1 | 2 | 3 | 4 | 5)}
+              min={1}
+              max={5}
+              step={1}
+              className="w-full"
+            />
+            <div className="flex justify-between">
+              {[1, 2, 3, 4, 5].map((level) => (
+                <span
+                  key={level}
+                  className={cn(
+                    'text-[10px] font-medium transition-colors',
+                    settings.riskLevel === level ? 'text-primary' : 'text-muted-foreground'
+                  )}
+                >
+                  R{level} {riskLabels[level]}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Data Management */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <Database className="w-4 h-4 text-sage-green" />
-          <h3 className="text-sm font-semibold text-foreground">数据管理</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mb-4">
-          数据仅存储在浏览器本地，建议定期导出备份
-        </p>
+      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Database className="w-4 h-4 text-sage-green" />
+              数据管理
+            </CardTitle>
+            <CardDescription className="text-xs">
+              数据仅存储在浏览器本地，建议定期导出备份
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={handleExport}
+            >
+              <Download className="w-4 h-4 text-sage-green" />
+              <div className="text-left">
+                <p className="text-sm font-medium">导出数据</p>
+                <p className="text-xs text-muted-foreground font-normal">下载 JSON 备份文件</p>
+              </div>
+            </Button>
 
-        <div className="space-y-3">
-          <button
-            onClick={handleExport}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent transition-colors"
-          >
-            <Download className="w-4 h-4 text-sage-green" />
-            <div className="text-left">
-              <p className="text-sm font-medium text-foreground">导出数据</p>
-              <p className="text-xs text-muted-foreground">下载 JSON 备份文件</p>
-            </div>
-          </button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+            >
+              <Upload className="w-4 h-4 text-sand-gold" />
+              <div className="text-left">
+                <p className="text-sm font-medium">导入数据</p>
+                <p className="text-xs text-muted-foreground font-normal">从 JSON 文件恢复</p>
+              </div>
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="hidden"
+            />
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
-          >
-            <Upload className="w-4 h-4 text-sand-gold" />
-            <div className="text-left">
-              <p className="text-sm font-medium text-foreground">导入数据</p>
-              <p className="text-xs text-muted-foreground">从 JSON 文件恢复</p>
-            </div>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleImport}
-            className="hidden"
-          />
+            <Separator className="my-3" />
 
-          <button
-            onClick={handleClear}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-destructive/30 hover:bg-destructive/5 transition-colors"
-          >
-            <Trash2 className="w-4 h-4 text-destructive" />
-            <div className="text-left">
-              <p className="text-sm font-medium text-destructive">清空数据</p>
-              <p className="text-xs text-muted-foreground">删除所有资产和设置</p>
-            </div>
-          </button>
-        </div>
-      </div>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3 border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50"
+              onClick={handleClear}
+            >
+              <Trash2 className="w-4 h-4 text-destructive" />
+              <div className="text-left">
+                <p className="text-sm font-medium text-destructive">清空数据</p>
+                <p className="text-xs text-muted-foreground font-normal">删除所有资产和设置</p>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* About */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-foreground mb-2">关于</h3>
-        <p className="text-xs text-muted-foreground">
-          AssetLens v1.0 · 看懂你的资产，守住你的风险
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          数据完全存储在本地浏览器，不上传任何服务器
-        </p>
-      </div>
-    </div>
+      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/10 to-sand-gold/10 flex items-center justify-center flex-shrink-0">
+                <Info className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">AssetLens v1.0</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  看懂你的资产，守住你的风险
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  数据完全存储在本地浏览器，不上传任何服务器
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

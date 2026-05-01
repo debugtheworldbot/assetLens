@@ -6,14 +6,31 @@ import { getCategorySummaries, getLiquiditySummary, getRiskExposure, getTagSumma
 import { generateAdvice } from '@/lib/advice';
 import { formatCurrency, formatPercentage } from '@/lib/format';
 import { Link } from 'wouter';
-import { AlertTriangle, ArrowRight, Shield, Droplets, PieChart, Tag } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Shield, Droplets, PieChart, Tag, TrendingUp, Wallet } from 'lucide-react';
 import CategoryDonut from '@/components/charts/CategoryDonut';
 import LiquidityBar from '@/components/charts/LiquidityBar';
 import TagDonut from '@/components/charts/TagDonut';
 import StockDonut from '@/components/charts/StockDonut';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
+
+const fadeInUp = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.06,
+    },
+  },
+};
 
 export default function Home() {
-
   const assets = useAssetStore((s) => s.assets);
   const settings = useAssetStore((s) => s.settings);
   const rates = useFxStore((s) => s.rates);
@@ -31,138 +48,220 @@ export default function Home() {
 
   if (assets.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-20">
-        <img
-          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663184921354/YbuhLiEW38SWn2PrinRRhR/empty-state-ciWY6BbYipCRVKAgqNRWmE.webp"
-          alt="开始记录"
-          className="w-48 h-48 object-contain mb-6 opacity-90"
-        />
-        <h2 className="text-xl font-bold text-foreground mb-2">开始记录你的资产</h2>
-        <p className="text-muted-foreground text-sm mb-6">添加第一笔资产，开启你的财务体检之旅</p>
+      <motion.div
+        className="flex flex-col items-center justify-center h-full py-20"
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-sand-gold/10 flex items-center justify-center mb-6">
+          <Wallet className="w-10 h-10 text-primary/60" />
+        </div>
+        <h2 className="text-xl font-semibold text-foreground mb-2">开始记录你的资产</h2>
+        <p className="text-muted-foreground text-sm mb-8 text-center max-w-xs">
+          添加第一笔资产，开启你的财务体检之旅
+        </p>
         <Link href="/assets">
-          <button className="inline-flex items-center gap-2 px-5 py-2.5 bg-warm-orange text-white rounded-lg font-medium text-sm hover:bg-warm-orange/90 transition-colors shadow-md shadow-warm-orange/20">
+          <Button size="lg" className="gap-2 shadow-lg shadow-primary/20">
             添加资产 <ArrowRight className="w-4 h-4" />
-          </button>
+          </Button>
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-6">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground font-medium">总资产</p>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-foreground tracking-tight mt-1 font-mono">
-            {formatCurrency(total, settings.baseCurrency, true)}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">{assets.length} 项资产</p>
-        </div>
-      </div>
+    <motion.div
+      className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-6"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
+      {/* Header - Total Value */}
+      <motion.div variants={fadeInUp} transition={{ duration: 0.4 }}>
+        <Card className="border-none shadow-none bg-transparent">
+          <CardContent className="p-0">
+            <p className="text-sm text-muted-foreground font-medium">总资产</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mt-1 font-mono tabular-nums">
+              <CountUp
+                end={total}
+                duration={1.2}
+                separator=","
+                decimals={0}
+                prefix={settings.baseCurrency === 'CNY' ? '¥' : settings.baseCurrency === 'USD' ? '$' : settings.baseCurrency === 'HKD' ? 'HK$' : ''}
+              />
+            </h1>
+            <div className="flex items-center gap-3 mt-2">
+              <Badge variant="secondary" className="text-xs font-normal">
+                {assets.length} 项资产
+              </Badge>
+              <Badge variant="secondary" className="text-xs font-normal">
+                R{settings.riskLevel} {riskLabels[settings.riskLevel]}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Category Donut - spans 2 cols on large */}
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-foreground mb-4">资产分布</h3>
-          <CategoryDonut data={categorySummaries} total={total} baseCurrency={settings.baseCurrency} />
-        </div>
+        {/* Category Donut */}
+        <motion.div variants={fadeInUp} transition={{ duration: 0.4 }} className="lg:col-span-2">
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-primary" />
+                资产分布
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CategoryDonut data={categorySummaries} total={total} baseCurrency={settings.baseCurrency} />
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Risk Level Card */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <Shield className="w-4 h-4 text-sage-green" />
-            <h3 className="text-sm font-semibold text-foreground">风险等级</h3>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="text-3xl font-bold text-warm-orange">R{settings.riskLevel}</div>
-            <p className="text-sm text-muted-foreground mt-1">{riskLabels[settings.riskLevel]}</p>
-            <p className="text-xs text-muted-foreground mt-3">
-              风险敞口: <span className="font-semibold text-foreground">{formatPercentage(riskExposure)}</span>
-            </p>
-          </div>
-          <Link href="/settings">
-            <span className="text-xs text-warm-orange hover:underline cursor-pointer">调整等级 →</span>
-          </Link>
-        </div>
+        <motion.div variants={fadeInUp} transition={{ duration: 0.4 }}>
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Shield className="w-4 h-4 text-sage-green" />
+                风险等级
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center flex-1 pt-4">
+              <div className="text-4xl font-bold text-primary font-mono">
+                <CountUp end={settings.riskLevel} duration={0.8} prefix="R" />
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{riskLabels[settings.riskLevel]}</p>
+              <div className="mt-4 w-full px-4">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>风险敞口</span>
+                  <span className="font-medium text-foreground">{formatPercentage(riskExposure)}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-sage-green via-sand-gold to-primary"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(riskExposure, 100)}%` }}
+                    transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+                  />
+                </div>
+              </div>
+              <Link href="/settings" className="mt-4">
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                  调整等级 →
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        {/* Stock Distribution - each stock with unique color */}
+        {/* Stock Distribution */}
         {stockSummaries.length > 1 && (
-          <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <PieChart className="w-4 h-4 text-warm-orange" />
-              <h3 className="text-sm font-semibold text-foreground">个股分布</h3>
-            </div>
-            <StockDonut data={stockSummaries} total={total} baseCurrency={settings.baseCurrency} />
-          </div>
+          <motion.div variants={fadeInUp} transition={{ duration: 0.4 }} className="lg:col-span-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                  个股分布
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StockDonut data={stockSummaries} total={total} baseCurrency={settings.baseCurrency} />
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
-        {/* Tag Distribution Pie Chart */}
+        {/* Tag Distribution */}
         {tagSummaries.length > 0 && tagSummaries.some(t => t.tag !== '未分类') && (
-          <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Tag className="w-4 h-4 text-sage-green" />
-              <h3 className="text-sm font-semibold text-foreground">标签分布</h3>
-            </div>
-            <TagDonut data={tagSummaries} total={total} baseCurrency={settings.baseCurrency} />
-          </div>
+          <motion.div variants={fadeInUp} transition={{ duration: 0.4 }} className="lg:col-span-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-sage-green" />
+                  标签分布
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TagDonut data={tagSummaries} total={total} baseCurrency={settings.baseCurrency} />
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
         {/* Liquidity Bar */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Droplets className="w-4 h-4 text-sage-green" />
-            <h3 className="text-sm font-semibold text-foreground">流动性分布</h3>
-          </div>
-          <LiquidityBar data={liquiditySummary} />
-        </div>
+        <motion.div variants={fadeInUp} transition={{ duration: 0.4 }}>
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Droplets className="w-4 h-4 text-sage-green" />
+                流动性分布
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LiquidityBar data={liquiditySummary} />
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Advice Summary */}
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-sand-gold" />
-              <h3 className="text-sm font-semibold text-foreground">调仓建议</h3>
-            </div>
-            <Link href="/advice">
-              <span className="text-xs text-warm-orange hover:underline cursor-pointer">查看全部 →</span>
-            </Link>
-          </div>
-          {adviceItems.length === 0 ? (
-            <div className="flex items-center gap-3 py-4">
-              <div className="w-8 h-8 rounded-full bg-sage-green/10 flex items-center justify-center">
-                <Shield className="w-4 h-4 text-sage-green" />
+        <motion.div variants={fadeInUp} transition={{ duration: 0.4 }} className="lg:col-span-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-sand-gold" />
+                  调仓建议
+                </CardTitle>
+                <Link href="/advice">
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-primary h-7">
+                    查看全部 →
+                  </Button>
+                </Link>
               </div>
-              <p className="text-sm text-sage-green font-medium">你的资产配置健康</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {adviceItems.slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-accent/50"
-                >
-                  <div
-                    className={`w-1.5 h-8 rounded-full ${
-                      item.severity === 'high' ? 'bg-warm-orange' : 'bg-sand-gold'
-                    }`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{item.message}</p>
+            </CardHeader>
+            <CardContent>
+              {adviceItems.length === 0 ? (
+                <div className="flex items-center gap-3 py-3">
+                  <div className="w-9 h-9 rounded-xl bg-sage-green/10 flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-sage-green" />
                   </div>
+                  <p className="text-sm text-sage-green font-medium">你的资产配置健康</p>
                 </div>
-              ))}
-              {adviceItems.length > 3 && (
-                <p className="text-xs text-muted-foreground text-center pt-1">
-                  还有 {adviceItems.length - 3} 条建议
-                </p>
+              ) : (
+                <div className="space-y-2">
+                  {adviceItems.slice(0, 3).map((item, index) => (
+                    <motion.div
+                      key={item.id}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 + index * 0.08, duration: 0.3 }}
+                    >
+                      <div
+                        className={`w-1 h-8 rounded-full flex-shrink-0 ${
+                          item.severity === 'high' ? 'bg-primary' : 'bg-sand-gold'
+                        }`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">{item.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.message}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {adviceItems.length > 3 && (
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      还有 {adviceItems.length - 3} 条建议
+                    </p>
+                  )}
+                </div>
               )}
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }

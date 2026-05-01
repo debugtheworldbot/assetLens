@@ -37,3 +37,9 @@
 - [x] Add real-time crypto price fetching (BTC, ETH, etc.)
 - [x] 个股分布饼图按占比倒序排列
 - [x] 个股分布饼图移除「其他」，全部股票都展示出来
+- [x] 全局设计升级：统一使用shadcn组件体系 + framer-motion动画
+- [x] 重新设计侧边栏和布局（简约高级感）
+- [x] 重新设计首页仪表盘（卡片动画 + 统计数字动画）
+- [x] 重新设计资产列表页（shadcn Card/Badge/Input/Dialog）
+- [x] 重新设计建议页和设置页
+- [x] 添加页面过渡动画和微交互效果

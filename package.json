@@ -50,7 +50,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cookie": "^1.0.2",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.2",
+    "drizzle-orm": "^0.44.5",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
     "framer-motion": "^12.23.22",
@@ -61,6 +64,7 @@
     "nanoid": "^5.1.5",
     "next-themes": "^0.4.6",
     "react": "^19.2.1",
+    "react-countup": "^6.5.3",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.64.0",
@@ -74,10 +78,7 @@
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
     "zod": "^4.1.12",
-    "zustand": "^5.0.12",
-    "cookie": "^1.0.2",
-    "dotenv": "^17.2.2",
-    "drizzle-orm": "^0.44.5"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",

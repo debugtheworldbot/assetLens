@@ -13,15 +13,12 @@ export default function AppShell({ children }: AppShellProps) {
   const priceRefresh = usePriceStore((s) => s.refresh);
 
   useEffect(() => {
-    // Initial fetch
     fxRefresh();
     priceRefresh();
 
-    // Auto-refresh intervals
-    const fxInterval = setInterval(fxRefresh, 60 * 60 * 1000); // 60 min
-    const priceInterval = setInterval(priceRefresh, 30 * 60 * 1000); // 30 min
+    const fxInterval = setInterval(fxRefresh, 60 * 60 * 1000);
+    const priceInterval = setInterval(priceRefresh, 30 * 60 * 1000);
 
-    // Visibility change handler
     let lastFxFetch = Date.now();
     let lastPriceFetch = Date.now();
 
@@ -50,14 +47,13 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar - desktop */}
       <Sidebar />
-      
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <StatusBar />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {children}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 md:p-6 lg:p-8">
+            {children}
+          </div>
         </main>
       </div>
     </div>

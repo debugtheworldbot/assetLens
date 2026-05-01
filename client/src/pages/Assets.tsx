@@ -14,6 +14,11 @@ import { assignStockColors } from '@/lib/stockColors';
 import { cn } from '@/lib/utils';
 import AssetFormModal from '@/components/assets/AssetFormModal';
 import CategoryBar from '@/components/charts/CategoryBar';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Assets() {
   const assets = useAssetStore((s) => s.assets);
@@ -45,7 +50,6 @@ export default function Assets() {
   const categorySummaries = getCategorySummaries(assets, settings.baseCurrency, rates, priceCache);
   const stockColorMap = useMemo(() => assignStockColors(assets), [assets]);
 
-  // Collect all unique tags for suggestions
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     assets.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
@@ -71,192 +75,238 @@ export default function Assets() {
   return (
     <div className="max-w-5xl mx-auto space-y-5 pb-20 md:pb-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">资产列表</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-warm-orange text-white rounded-lg font-medium text-sm hover:bg-warm-orange/90 transition-colors shadow-sm shadow-warm-orange/20"
-        >
+      <motion.div
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">资产列表</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">{assets.length} 项资产</p>
+        </div>
+        <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 shadow-sm">
           <Plus className="w-4 h-4" />
           新增
-        </button>
-      </div>
+        </Button>
+      </motion.div>
 
       {/* Category Bar Chart */}
       {categorySummaries.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <CategoryBar data={categorySummaries} />
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+        >
+          <Card>
+            <CardContent className="pt-4">
+              <CategoryBar data={categorySummaries} />
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <motion.div
+        className="flex flex-col sm:flex-row gap-3"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+      >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
+          <Input
             type="text"
             placeholder="搜索资产名称或代码..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-warm-orange/30"
+            className="pl-9 h-9"
           />
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1">
-          <button
+          <Button
+            variant={filterCategory === 'all' ? 'default' : 'outline'}
+            size="sm"
             onClick={() => setFilterCategory('all')}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
-              filterCategory === 'all'
-                ? 'bg-warm-orange text-white'
-                : 'bg-muted text-muted-foreground hover:bg-accent'
-            )}
+            className="h-8 text-xs rounded-full px-3"
           >
             全部
-          </button>
+          </Button>
           {CATEGORIES.map((cat) => (
-            <button
+            <Button
               key={cat.key}
+              variant={filterCategory === cat.key ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setFilterCategory(cat.key)}
-              className={cn(
-                'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
-                filterCategory === cat.key
-                  ? 'text-white'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
-              )}
-              style={filterCategory === cat.key ? { backgroundColor: cat.color } : {}}
+              className="h-8 text-xs rounded-full px-3 whitespace-nowrap"
+              style={filterCategory === cat.key ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
             >
               {cat.label}
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Asset List */}
       {filteredAssets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16">
+        <motion.div
+          className="flex flex-col items-center justify-center py-16"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
           <p className="text-muted-foreground text-sm">
             {assets.length === 0 ? '还没有资产，点击上方"新增"开始记录' : '没有匹配的资产'}
           </p>
-        </div>
+        </motion.div>
       ) : (
         <div className="space-y-2">
-          {filteredAssets.map((asset) => {
-            const valueInOriginal = getAssetValueInOriginalCurrency(asset, priceCache);
-            const valueInBase = getAssetValueInBaseCurrency(asset, settings.baseCurrency, rates, priceCache);
-            const isStock = asset.category === 'stock';
-            const stockAsset = isStock ? (asset as StockAsset) : null;
-            const hasError = isStock && stockAsset?.pricingError;
+          <AnimatePresence mode="popLayout">
+            {filteredAssets.map((asset, index) => {
+              const valueInOriginal = getAssetValueInOriginalCurrency(asset, priceCache);
+              const valueInBase = getAssetValueInBaseCurrency(asset, settings.baseCurrency, rates, priceCache);
+              const isStock = asset.category === 'stock';
+              const stockAsset = isStock ? (asset as StockAsset) : null;
+              const hasError = isStock && stockAsset?.pricingError;
 
-            return (
-              <div
-                key={asset.id}
-                className="bg-card rounded-xl border border-border p-4 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start gap-3">
-                  {/* Category dot - use stock-specific color for stocks */}
-                  <div
-                    className="w-3 h-3 rounded-full mt-1.5 flex-shrink-0"
-                    style={{ backgroundColor: isStock ? (stockColorMap[asset.id] || getCategoryColor(asset.category)) : getCategoryColor(asset.category) }}
-                  />
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{asset.name}</h3>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                        {getCategoryLabel(asset.category)}
-                      </span>
-                    </div>
-
-                    {isStock && stockAsset ? (
-                      <div className="mt-1">
-                        <p className="text-xs text-muted-foreground">
-                          {stockAsset.symbol} · {stockAsset.shares} 股
-                          {stockAsset.lastPrice && (
-                            <> × {formatCurrency(stockAsset.lastPrice, stockAsset.currency)}</>
-                          )}
-                        </p>
-                        {hasError && (
-                          <p className="text-xs text-warm-orange flex items-center gap-1 mt-0.5">
-                            <AlertTriangle className="w-3 h-3" /> 无法获取报价
-                          </p>
-                        )}
-                        {stockAsset.lastPriceAt && !hasError && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            价格更新: {formatTimeAgo(stockAsset.lastPriceAt)}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(valueInOriginal, asset.currency)}
-                      </p>
-                    )}
-
-                    {/* Tags */}
-                    <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                      {asset.tags && asset.tags.length > 0 ? (
-                        asset.tags.map(tag => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-warm-orange/10 text-warm-orange border border-warm-orange/20"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : null}
-                      <button
-                        onClick={() => setEditingTagsId(editingTagsId === asset.id ? null : asset.id)}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] text-muted-foreground hover:text-warm-orange hover:bg-warm-orange/5 transition-colors"
-                      >
-                        <Tag className="w-2.5 h-2.5" />
-                        {asset.tags && asset.tags.length > 0 ? '编辑' : '添加标签'}
-                      </button>
-                    </div>
-
-                    {/* Inline Tag Editor */}
-                    {editingTagsId === asset.id && (
-                      <div className="mt-2">
-                        <TagEditor
-                          tags={asset.tags || []}
-                          onChange={(tags) => updateAssetTags(asset.id, tags)}
-                          suggestions={allTags}
+              return (
+                <motion.div
+                  key={asset.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.25, delay: index * 0.03 }}
+                >
+                  <Card className="hover:shadow-md transition-shadow duration-200 group">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        {/* Category dot */}
+                        <div
+                          className="w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0"
+                          style={{
+                            backgroundColor: isStock
+                              ? (stockColorMap[asset.id] || getCategoryColor(asset.category))
+                              : getCategoryColor(asset.category),
+                          }}
                         />
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-medium text-foreground truncate">{asset.name}</h3>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                              {getCategoryLabel(asset.category)}
+                            </Badge>
+                          </div>
+
+                          {isStock && stockAsset ? (
+                            <div className="mt-1">
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {stockAsset.symbol} · {stockAsset.shares} 股
+                                {stockAsset.lastPrice && (
+                                  <> × {formatCurrency(stockAsset.lastPrice, stockAsset.currency)}</>
+                                )}
+                              </p>
+                              {hasError && (
+                                <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
+                                  <AlertTriangle className="w-3 h-3" /> 无法获取报价
+                                </p>
+                              )}
+                              {stockAsset.lastPriceAt && !hasError && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  价格更新: {formatTimeAgo(stockAsset.lastPriceAt)}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-1 font-mono">
+                              {formatCurrency(valueInOriginal, asset.currency)}
+                            </p>
+                          )}
+
+                          {/* Tags */}
+                          <div className="mt-2 flex items-center gap-1 flex-wrap">
+                            {asset.tags && asset.tags.length > 0 ? (
+                              asset.tags.map(tag => (
+                                <Badge
+                                  key={tag}
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 h-4 font-normal border-primary/20 text-primary/80"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingTagsId(editingTagsId === asset.id ? null : asset.id)}
+                              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-primary"
+                            >
+                              <Tag className="w-2.5 h-2.5 mr-0.5" />
+                              {asset.tags && asset.tags.length > 0 ? '编辑' : '标签'}
+                            </Button>
+                          </div>
+
+                          {/* Inline Tag Editor */}
+                          <AnimatePresence>
+                            {editingTagsId === asset.id && (
+                              <motion.div
+                                className="mt-2"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <TagEditor
+                                  tags={asset.tags || []}
+                                  onChange={(tags) => updateAssetTags(asset.id, tags)}
+                                  suggestions={allTags}
+                                />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Value */}
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-foreground font-mono tabular-nums">
+                            {formatCurrency(valueInBase, settings.baseCurrency, true)}
+                          </p>
+                          {asset.currency !== settings.baseCurrency && (
+                            <p className="text-[10px] text-muted-foreground font-mono">
+                              ({formatCurrency(valueInOriginal, asset.currency, true)})
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleEdit(asset)}
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 hover:text-destructive"
+                            onClick={() => handleDelete(asset.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Value */}
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-foreground font-mono">
-                      {formatCurrency(valueInBase, settings.baseCurrency, true)}
-                    </p>
-                    {asset.currency !== settings.baseCurrency && (
-                      <p className="text-[10px] text-muted-foreground">
-                        ({formatCurrency(valueInOriginal, asset.currency, true)})
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => handleEdit(asset)}
-                      className="p-1.5 rounded-lg hover:bg-accent transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(asset.id)}
-                      className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
 

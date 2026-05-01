@@ -451,13 +451,12 @@ export default function AssetFormModal({ asset, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
       {/* Modal */}
-      <div className="relative bg-card rounded-2xl border border-border shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-bold text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             {isEditing ? '编辑资产' : '新增资产'}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent transition-colors">
@@ -935,7 +934,7 @@ export default function AssetFormModal({ asset, onClose }: Props) {
           <button
             type="submit"
             disabled={!canSubmit()}
-            className="w-full py-2.5 rounded-lg bg-warm-orange text-white font-medium text-sm hover:bg-warm-orange/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
           >
             {isEditing ? '保存修改' : isStock ? `添加 ${entries.filter(e => e.ticker.trim() && e.name.trim() && e.shares).length} 只股票` : '添加资产'}
           </button>

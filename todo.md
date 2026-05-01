@@ -61,3 +61,4 @@
 - [x] 移除 framer-motion 和 react-countup，使用纯 shadcn 组件
 - [x] 重构图表组件使用 shadcn chart 变量色（chart-1/2/3）
 - [x] 所有页面移除自定义颜色类（sage-green/sand-gold/warm-gray）
+- [x] 优化首页卡片视觉区分度，不同区域卡片有明确的层次感和颜色区分

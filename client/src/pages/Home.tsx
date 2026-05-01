@@ -57,29 +57,29 @@ export default function Home() {
     );
   }
 
-  const currencyPrefix = settings.baseCurrency === 'CNY' ? '¥' : settings.baseCurrency === 'USD' ? '$' : settings.baseCurrency === 'HKD' ? 'HK$' : '';
-
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-6">
-      {/* Header - Total Value */}
-      <div>
-        <p className="text-sm text-muted-foreground font-medium">总资产</p>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mt-1 tabular-nums">
-          {formatCurrency(total, settings.baseCurrency)}
-        </h1>
-        <div className="flex items-center gap-3 mt-2">
-          <Badge variant="secondary">
-            {assets.length} 项资产
-          </Badge>
-          <Badge variant="secondary">
-            R{settings.riskLevel} {riskLabels[settings.riskLevel]}
-          </Badge>
-        </div>
-      </div>
+      {/* Header - Total Value: prominent section with primary accent */}
+      <Card className="border-none bg-primary text-primary-foreground shadow-md">
+        <CardContent className="pt-6 pb-6">
+          <p className="text-sm font-medium opacity-80">总资产</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight mt-1 tabular-nums">
+            {formatCurrency(total, settings.baseCurrency)}
+          </h1>
+          <div className="flex items-center gap-3 mt-3">
+            <Badge variant="secondary" className="bg-primary-foreground/15 text-primary-foreground border-none">
+              {assets.length} 项资产
+            </Badge>
+            <Badge variant="secondary" className="bg-primary-foreground/15 text-primary-foreground border-none">
+              R{settings.riskLevel} {riskLabels[settings.riskLevel]}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Category Donut */}
+        {/* Category Donut - standard card */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -92,23 +92,23 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Risk Level Card */}
-        <Card>
+        {/* Risk Level Card - accent background for emphasis */}
+        <Card className="bg-accent">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Shield className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium flex items-center gap-2 text-accent-foreground">
+              <Shield className="h-4 w-4" />
               风险等级
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center pt-4">
-            <div className="text-4xl font-bold tabular-nums">
+            <div className="text-4xl font-bold tabular-nums text-accent-foreground">
               R{settings.riskLevel}
             </div>
             <p className="text-sm text-muted-foreground mt-1">{riskLabels[settings.riskLevel]}</p>
             <div className="mt-4 w-full space-y-1.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>风险敞口</span>
-                <span className="font-medium text-foreground tabular-nums">{formatPercentage(riskExposure)}</span>
+                <span className="font-medium text-accent-foreground tabular-nums">{formatPercentage(riskExposure)}</span>
               </div>
               <Progress value={Math.min(riskExposure, 100)} className="h-1.5" />
             </div>
@@ -120,7 +120,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Stock Distribution */}
+        {/* Stock Distribution - standard card */}
         {stockSummaries.length > 1 && (
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
@@ -135,7 +135,7 @@ export default function Home() {
           </Card>
         )}
 
-        {/* Tag Distribution */}
+        {/* Tag Distribution - standard card */}
         {tagSummaries.length > 0 && tagSummaries.some(t => t.tag !== '未分类') && (
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
@@ -150,11 +150,11 @@ export default function Home() {
           </Card>
         )}
 
-        {/* Liquidity Bar */}
-        <Card>
+        {/* Liquidity Bar - secondary background for visual grouping */}
+        <Card className="bg-secondary">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Droplets className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium flex items-center gap-2 text-secondary-foreground">
+              <Droplets className="h-4 w-4" />
               流动性分布
             </CardTitle>
           </CardHeader>
@@ -163,8 +163,8 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Advice Summary */}
-        <Card className="lg:col-span-2">
+        {/* Advice Summary - muted background with left border accent */}
+        <Card className="lg:col-span-2 border-l-4 border-l-primary">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">

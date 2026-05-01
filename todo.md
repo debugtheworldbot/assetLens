@@ -56,3 +56,8 @@
 - [x] 重构 Assets.tsx 空状态和操作区为 shadcn 原生组件
 - [x] 重构 Settings.tsx 确认弹窗为 shadcn AlertDialog
 - [x] 添加“导出分析 Prompt”功能，将资产信息+分析数据整理为结构化 prompt，方便复制到大模型获取调仓建议
+- [x] 重置 index.css 为 shadcn 默认主题，移除所有自定义颜色
+- [x] 重构侧边栏为 shadcn Sidebar 原生组件
+- [x] 移除 framer-motion 和 react-countup，使用纯 shadcn 组件
+- [x] 重构图表组件使用 shadcn chart 变量色（chart-1/2/3）
+- [x] 所有页面移除自定义颜色类（sage-green/sand-gold/warm-gray）

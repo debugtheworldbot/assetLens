@@ -34,12 +34,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { motion } from 'framer-motion';
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-};
 
 export default function Settings() {
   const settings = useAssetStore((s) => s.settings);
@@ -141,7 +135,6 @@ export default function Settings() {
       toast.success('已复制到剪贴板');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for browsers that don't support clipboard API
       const textarea = document.createElement('textarea');
       textarea.value = promptText;
       textarea.style.position = 'fixed';
@@ -169,197 +162,184 @@ export default function Settings() {
   };
 
   return (
-    <motion.div
-      className="max-w-2xl mx-auto space-y-5 pb-20 md:pb-6"
-      initial="initial"
-      animate="animate"
-      variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
-    >
+    <div className="max-w-2xl mx-auto space-y-5 pb-20 md:pb-6">
       {/* Header */}
-      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
-        <h1 className="text-xl font-semibold text-foreground">设置</h1>
+      <div>
+        <h1 className="text-xl font-semibold">设置</h1>
         <p className="text-sm text-muted-foreground mt-1">管理你的偏好和数据</p>
-      </motion.div>
+      </div>
 
       {/* Base Currency */}
-      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Globe className="w-4 h-4 text-sage-green" />
-              基准币种
-            </CardTitle>
-            <CardDescription className="text-xs">
-              所有资产将换算为此币种显示总计
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Select
-              value={settings.baseCurrency}
-              onValueChange={(val) => setBaseCurrency(val as Currency)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    {c.symbol} {c.name} ({c.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            基准币种
+          </CardTitle>
+          <CardDescription className="text-xs">
+            所有资产将换算为此币种显示总计
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select
+            value={settings.baseCurrency}
+            onValueChange={(val) => setBaseCurrency(val as Currency)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c.code} value={c.code}>
+                  {c.symbol} {c.name} ({c.code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       {/* Risk Level */}
-      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Shield className="w-4 h-4 text-sage-green" />
-                风险等级
-              </CardTitle>
-              <Badge variant="outline" className="font-mono text-xs">
-                R{settings.riskLevel} · {riskLabels[settings.riskLevel]}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Slider
-              value={[settings.riskLevel]}
-              onValueChange={([val]) => setRiskLevel(val as 1 | 2 | 3 | 4 | 5)}
-              min={1}
-              max={5}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              {[1, 2, 3, 4, 5].map((level) => (
-                <span
-                  key={level}
-                  className={cn(
-                    'text-[10px] font-medium transition-colors',
-                    settings.riskLevel === level ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                >
-                  R{level} {riskLabels[level]}
-                </span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              风险等级
+            </CardTitle>
+            <Badge variant="outline" className="tabular-nums text-xs">
+              R{settings.riskLevel} · {riskLabels[settings.riskLevel]}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Slider
+            value={[settings.riskLevel]}
+            onValueChange={([val]) => setRiskLevel(val as 1 | 2 | 3 | 4 | 5)}
+            min={1}
+            max={5}
+            step={1}
+            className="w-full"
+          />
+          <div className="flex justify-between">
+            {[1, 2, 3, 4, 5].map((level) => (
+              <span
+                key={level}
+                className={cn(
+                  'text-[10px] font-medium transition-colors',
+                  settings.riskLevel === level ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                R{level} {riskLabels[level]}
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Data Management */}
-      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Database className="w-4 h-4 text-sage-green" />
-              数据管理
-            </CardTitle>
-            <CardDescription className="text-xs">
-              数据仅存储在浏览器本地，建议定期导出备份
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={handleExport}
-            >
-              <Download className="w-4 h-4 text-sage-green" />
-              <div className="text-left">
-                <p className="text-sm font-medium">导出数据</p>
-                <p className="text-xs text-muted-foreground font-normal">下载 JSON 备份文件</p>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            数据管理
+          </CardTitle>
+          <CardDescription className="text-xs">
+            数据仅存储在浏览器本地，建议定期导出备份
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 h-auto py-3"
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4" />
+            <div className="text-left">
+              <p className="text-sm font-medium">导出数据</p>
+              <p className="text-xs text-muted-foreground font-normal">下载 JSON 备份文件</p>
+            </div>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 h-auto py-3"
+            onClick={handleGeneratePrompt}
+          >
+            <BrainCircuit className="h-4 w-4" />
+            <div className="text-left flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">导出分析 Prompt</p>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">AI</Badge>
               </div>
-            </Button>
+              <p className="text-xs text-muted-foreground font-normal">生成资产分析报告，复制给 AI 获取调仓建议</p>
+            </div>
+          </Button>
 
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={handleGeneratePrompt}
-            >
-              <BrainCircuit className="w-4 h-4 text-primary" />
-              <div className="text-left flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">导出分析 Prompt</p>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">AI</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground font-normal">生成资产分析报告，复制给 AI 获取调仓建议</p>
-              </div>
-            </Button>
+          <Separator className="my-3" />
 
-            <Separator className="my-3" />
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 h-auto py-3"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload className="h-4 w-4" />
+            <div className="text-left">
+              <p className="text-sm font-medium">导入数据</p>
+              <p className="text-xs text-muted-foreground font-normal">从 JSON 文件恢复</p>
+            </div>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
 
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-            >
-              <Upload className="w-4 h-4 text-sand-gold" />
-              <div className="text-left">
-                <p className="text-sm font-medium">导入数据</p>
-                <p className="text-xs text-muted-foreground font-normal">从 JSON 文件恢复</p>
-              </div>
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+          <Separator className="my-3" />
 
-            <Separator className="my-3" />
-
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3 border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50"
-              onClick={() => setShowClearDialog(true)}
-            >
-              <Trash2 className="w-4 h-4 text-destructive" />
-              <div className="text-left">
-                <p className="text-sm font-medium text-destructive">清空数据</p>
-                <p className="text-xs text-muted-foreground font-normal">删除所有资产和设置</p>
-              </div>
-            </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 h-auto py-3 border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50"
+            onClick={() => setShowClearDialog(true)}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-destructive">清空数据</p>
+              <p className="text-xs text-muted-foreground font-normal">删除所有资产和设置</p>
+            </div>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* About */}
-      <motion.div variants={fadeInUp} transition={{ duration: 0.3 }}>
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/10 to-sand-gold/10 flex items-center justify-center flex-shrink-0">
-                <Info className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">AssetLens v1.0</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  看懂你的资产，守住你的风险
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  数据完全存储在本地浏览器，不上传任何服务器
-                </p>
-              </div>
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+              <Info className="h-4 w-4 text-muted-foreground" />
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+            <div>
+              <p className="text-sm font-medium">AssetLens v1.0</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                看懂你的资产，守住你的风险
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                数据完全存储在本地浏览器，不上传任何服务器
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Prompt Preview Dialog */}
       <Dialog open={showPromptDialog} onOpenChange={setShowPromptDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BrainCircuit className="w-5 h-5 text-primary" />
+              <BrainCircuit className="h-5 w-5" />
               分析 Prompt 预览
             </DialogTitle>
             <DialogDescription>
@@ -367,7 +347,7 @@ export default function Settings() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
-            <pre className="text-xs leading-relaxed whitespace-pre-wrap break-words bg-muted/50 rounded-lg p-4 font-mono text-foreground border">
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap break-words bg-muted rounded-lg p-4 font-mono border">
               {promptText}
             </pre>
           </div>
@@ -378,7 +358,7 @@ export default function Settings() {
               onClick={handleDownloadPrompt}
               className="gap-1.5"
             >
-              <FileDown className="w-3.5 h-3.5" />
+              <FileDown className="h-3.5 w-3.5" />
               下载 .md
             </Button>
             <Button
@@ -388,12 +368,12 @@ export default function Settings() {
             >
               {copied ? (
                 <>
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="h-3.5 w-3.5" />
                   已复制
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5" />
+                  <Copy className="h-3.5 w-3.5" />
                   复制全部
                 </>
               )}
@@ -440,6 +420,6 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+    </div>
   );
 }

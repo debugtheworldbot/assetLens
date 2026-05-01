@@ -55,3 +55,4 @@
 - [x] 用 shadcn CLI 安装/补齐缺失组件（AlertDialog 等）
 - [x] 重构 Assets.tsx 空状态和操作区为 shadcn 原生组件
 - [x] 重构 Settings.tsx 确认弹窗为 shadcn AlertDialog
+- [x] 添加“导出分析 Prompt”功能，将资产信息+分析数据整理为结构化 prompt，方便复制到大模型获取调仓建议

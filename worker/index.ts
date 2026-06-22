@@ -1,6 +1,5 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { ENV, setRuntimeEnv, type RuntimeEnv } from "../server/_core/env";
-import { setStorageBucket } from "../server/storage";
 import { appRouter } from "../server/routers";
 
 type Env = RuntimeEnv & {
@@ -90,7 +89,6 @@ async function handleStorageProxy(request: Request, env: Env) {
 export default {
   async fetch(request: Request, env: Env) {
     setRuntimeEnv({ ...env, NODE_ENV: "production" });
-    setStorageBucket(env.ASSET_BUCKET ?? null);
 
     const { pathname } = new URL(request.url);
 

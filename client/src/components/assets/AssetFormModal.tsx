@@ -66,6 +66,25 @@ function createEmptyEntry(): StockEntry {
   };
 }
 
+function createEntryFromStockAsset(asset: StockAsset): StockEntry {
+  const ticker = asset.symbol.split('.')[0];
+
+  return {
+    id: crypto.randomUUID(),
+    name: asset.name,
+    ticker,
+    shares: String(asset.shares),
+    searchStatus: asset.lastPrice ? 'found' : 'idle',
+    price: asset.lastPrice || null,
+    priceAsOf: asset.lastPriceAt || null,
+    error: null,
+    searchQuery: ticker,
+    searchResults: [],
+    showDropdown: false,
+    isSearching: false,
+  };
+}
+
 const LIQUIDITY_OPTIONS: { value: Liquidity; label: string }[] = [
   { value: 'high', label: '高' },
   { value: 'medium', label: '中' },
@@ -108,22 +127,7 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
   );
   const [entries, setEntries] = useState<StockEntry[]>(() => {
     if (asset?.category === 'stock') {
-      const sa = asset as StockAsset;
-      const ticker = sa.symbol.split('.')[0];
-      return [{
-        id: crypto.randomUUID(),
-        name: sa.name,
-        ticker,
-        shares: String(sa.shares),
-        searchStatus: sa.lastPrice ? 'found' : 'idle',
-        price: sa.lastPrice || null,
-        priceAsOf: sa.lastPriceAt || null,
-        error: null,
-        searchQuery: ticker,
-        searchResults: [],
-        showDropdown: false,
-        isSearching: false,
-      }];
+      return [createEntryFromStockAsset(asset as StockAsset)];
     }
     return [createEmptyEntry()];
   });
@@ -135,6 +139,28 @@ export default function AssetFormModal({ asset, open, onClose }: Props) {
 
   const searchTimers = useRef<Record<string, NodeJS.Timeout>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (cryptoTimer.current) {
+      clearTimeout(cryptoTimer.current);
+      cryptoTimer.current = null;
+    }
+
+    setCategory(asset?.category || 'cash');
+    setName(asset?.name || '');
+    setLiquidity(asset?.liquidity || 'high');
+    setNote(asset?.note || '');
+    setCryptoSymbol(asset?.category === 'crypto' ? (asset as CryptoAsset).symbol : '');
+    setCryptoPrice(asset?.category === 'crypto' ? (asset as CryptoAsset).lastPrice || null : null);
+    setCryptoPriceLoading(false);
+    setCryptoPriceError(null);
+    setAmount(asset && asset.category !== 'stock' ? String((asset as CashAsset | CryptoAsset).amount) : '');
+    setCurrency(asset?.currency || settings.baseCurrency);
+    setMarket(asset?.category === 'stock' ? (asset as StockAsset).market : 'CN');
+    setEntries(asset?.category === 'stock' ? [createEntryFromStockAsset(asset as StockAsset)] : [createEmptyEntry()]);
+  }, [asset?.id, open, settings.baseCurrency]);
 
   useEffect(() => {
     if (!isEditing) {

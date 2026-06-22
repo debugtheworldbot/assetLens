@@ -167,7 +167,7 @@ export default function Assets() {
           )}
         </Empty>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filteredAssets.map((asset) => {
             const valueInOriginal = getAssetValueInOriginalCurrency(asset, priceCache);
             const valueInBase = getAssetValueInBaseCurrency(asset, settings.baseCurrency, rates, priceCache);
@@ -176,9 +176,9 @@ export default function Assets() {
             const hasError = isStock && stockAsset?.pricingError;
 
             return (
-              <Card key={asset.id} className="group">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
+              <Card key={asset.id} className="group h-full">
+                <CardContent className="p-3.5">
+                  <div className="flex items-start gap-2.5">
                     {/* Category dot */}
                     <div
                       className="w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0"
@@ -262,7 +262,7 @@ export default function Assets() {
                     </div>
 
                     {/* Value */}
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-right flex-shrink-0 max-w-[7rem]">
                       <p className="text-sm font-semibold tabular-nums">
                         {formatCurrency(valueInBase, settings.baseCurrency, true)}
                       </p>
@@ -274,7 +274,7 @@ export default function Assets() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button

@@ -62,9 +62,12 @@ export default function TagDonut({ data, total, baseCurrency }: Props) {
               <ChartTooltipContent
                 hideLabel={false}
                 formatter={(value, name) => (
-                  <span className="text-foreground font-mono font-medium tabular-nums">
-                    {formatCurrency(value as number, baseCurrency, true)}
-                  </span>
+                  <div className="flex w-full min-w-[8rem] items-center justify-between gap-3">
+                    <span className="text-muted-foreground">{name}</span>
+                    <span className="text-foreground font-mono font-medium tabular-nums">
+                      {formatCurrency(value as number, baseCurrency, true)}
+                    </span>
+                  </div>
                 )}
               />
             }

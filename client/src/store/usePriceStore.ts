@@ -14,80 +14,64 @@ interface PriceStore {
   fetchCryptoSingle: (symbol: string) => Promise<void>;
 }
 
+const PRICE_BATCH_SIZE = 20;
+
+type PriceResult = {
+  prices: Record<string, { price: number; asOf: string }>;
+  errors: Record<string, string>;
+};
+
 /**
- * Fetch stock prices through the backend proxy API (avoids CORS issues)
+ * Fetch prices through the backend proxy API (avoids CORS issues)
  * tRPC uses superjson transformer:
  *   - input must be wrapped in { json: { ... } }
  *   - response is in { result: { data: { json: ... } } }
  */
-async function fetchPricesFromBackend(symbols: string[]): Promise<{
-  prices: Record<string, { price: number; asOf: string }>;
-  errors: Record<string, string>;
-}> {
-  try {
-    const input = JSON.stringify({ json: { symbols } });
-    const res = await fetch(`/api/trpc/market.getStockPrices?input=${encodeURIComponent(input)}`, {
-      credentials: 'include',
-    });
-    
-    if (!res.ok) {
-      const errorMap: Record<string, string> = {};
-      symbols.forEach(s => { errorMap[s.toUpperCase()] = `HTTP ${res.status}`; });
-      return { prices: {}, errors: errorMap };
+async function fetchPriceBatches(endpoint: string, symbols: string[]): Promise<PriceResult> {
+  const result: PriceResult = { prices: {}, errors: {} };
+
+  for (let i = 0; i < symbols.length; i += PRICE_BATCH_SIZE) {
+    const batch = symbols.slice(i, i + PRICE_BATCH_SIZE);
+
+    try {
+      const input = JSON.stringify({ json: { symbols: batch } });
+      const res = await fetch(`/api/trpc/${endpoint}?input=${encodeURIComponent(input)}`, {
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        batch.forEach(s => { result.errors[s.toUpperCase()] = `HTTP ${res.status}`; });
+        continue;
+      }
+
+      const json = await res.json();
+      const data = json?.result?.data?.json;
+
+      if (!data) {
+        batch.forEach(s => { result.errors[s.toUpperCase()] = '响应格式错误'; });
+        continue;
+      }
+
+      Object.assign(result.prices, data.prices || {});
+      Object.assign(result.errors, data.errors || {});
+    } catch (err: any) {
+      batch.forEach(s => { result.errors[s.toUpperCase()] = err.message || '网络错误'; });
     }
-    
-    const json = await res.json();
-    const data = json?.result?.data?.json;
-    
-    if (!data) {
-      const errorMap: Record<string, string> = {};
-      symbols.forEach(s => { errorMap[s.toUpperCase()] = '响应格式错误'; });
-      return { prices: {}, errors: errorMap };
-    }
-    
-    return { prices: data.prices || {}, errors: data.errors || {} };
-  } catch (err: any) {
-    const errorMap: Record<string, string> = {};
-    symbols.forEach(s => { errorMap[s.toUpperCase()] = err.message || '网络错误'; });
-    return { prices: {}, errors: errorMap };
   }
+
+  return result;
+}
+
+async function fetchPricesFromBackend(symbols: string[]): Promise<PriceResult> {
+  return fetchPriceBatches('market.getStockPrices', symbols);
 }
 
 /**
  * Fetch crypto prices through the backend proxy API
  * Symbols are bare crypto names: BTC, ETH, SOL, etc.
  */
-async function fetchCryptoPricesFromBackend(symbols: string[]): Promise<{
-  prices: Record<string, { price: number; asOf: string }>;
-  errors: Record<string, string>;
-}> {
-  try {
-    const input = JSON.stringify({ json: { symbols } });
-    const res = await fetch(`/api/trpc/market.getCryptoPrices?input=${encodeURIComponent(input)}`, {
-      credentials: 'include',
-    });
-    
-    if (!res.ok) {
-      const errorMap: Record<string, string> = {};
-      symbols.forEach(s => { errorMap[s.toUpperCase()] = `HTTP ${res.status}`; });
-      return { prices: {}, errors: errorMap };
-    }
-    
-    const json = await res.json();
-    const data = json?.result?.data?.json;
-    
-    if (!data) {
-      const errorMap: Record<string, string> = {};
-      symbols.forEach(s => { errorMap[s.toUpperCase()] = '响应格式错误'; });
-      return { prices: {}, errors: errorMap };
-    }
-    
-    return { prices: data.prices || {}, errors: data.errors || {} };
-  } catch (err: any) {
-    const errorMap: Record<string, string> = {};
-    symbols.forEach(s => { errorMap[s.toUpperCase()] = err.message || '网络错误'; });
-    return { prices: {}, errors: errorMap };
-  }
+async function fetchCryptoPricesFromBackend(symbols: string[]): Promise<PriceResult> {
+  return fetchPriceBatches('market.getCryptoPrices', symbols);
 }
 
 export const usePriceStore = create<PriceStore>()(

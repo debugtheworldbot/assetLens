@@ -249,7 +249,7 @@ function getLanguageName(langCode: string): string {
  * import { transcribeAudio } from "./_core/voiceTranscription";
  * 
  * export const voiceRouter = router({
- *   transcribe: protectedProcedure
+ *   transcribe: publicProcedure
  *     .input(z.object({
  *       audioUrl: z.string(),
  *       language: z.string().optional(),

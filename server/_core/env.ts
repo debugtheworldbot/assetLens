@@ -1,10 +1,22 @@
+export type RuntimeEnv = Partial<Record<
+  | "NODE_ENV"
+  | "BUILT_IN_FORGE_API_URL"
+  | "BUILT_IN_FORGE_API_KEY",
+  string
+>>;
+
+let runtimeEnv: RuntimeEnv = {};
+
+export function setRuntimeEnv(env: RuntimeEnv) {
+  runtimeEnv = env;
+}
+
+function readEnv(key: keyof RuntimeEnv) {
+  return runtimeEnv[key] ?? process.env[key] ?? "";
+}
+
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  get isProduction() { return readEnv("NODE_ENV") === "production"; },
+  get forgeApiUrl() { return readEnv("BUILT_IN_FORGE_API_URL"); },
+  get forgeApiKey() { return readEnv("BUILT_IN_FORGE_API_KEY"); },
 };

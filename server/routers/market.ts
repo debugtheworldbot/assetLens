@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
-import { callDataApi } from "../_core/dataApi";
 import { fuzzySearchStocks, type MarketType } from "../stockList";
 
 /**
@@ -61,24 +60,32 @@ interface PriceResult {
 }
 
 /**
- * Fetch price from Yahoo Finance via Manus Data API (reliable, no CORS/timeout issues)
+ * Fetch price from Yahoo Finance server-side.
  */
 async function fetchFromDataApi(symbol: string): Promise<PriceResult> {
   const yahooSymbol = toYahooSymbol(symbol);
   const upperSymbol = symbol.toUpperCase();
 
   try {
-    const response = (await callDataApi("YahooFinance/get_stock_chart", {
-      query: {
-        symbol: yahooSymbol,
-        interval: "1d",
-        range: "1d",
+    const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`);
+    url.searchParams.set("interval", "1d");
+    url.searchParams.set("range", "1d");
+
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "Mozilla/5.0",
       },
-    })) as any;
+    });
 
-    const meta = response?.chart?.result?.[0]?.meta;
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance failed (${response.status})`);
+    }
 
-    if (meta?.regularMarketPrice) {
+    const data = (await response.json()) as any;
+    const meta = data?.chart?.result?.[0]?.meta;
+
+    if (typeof meta?.regularMarketPrice === "number") {
       return {
         symbol: upperSymbol,
         price: meta.regularMarketPrice,
@@ -98,6 +105,30 @@ async function fetchFromDataApi(symbol: string): Promise<PriceResult> {
       error: "无法解析报价",
     };
   } catch (err: any) {
+    const cryptoMatch = upperSymbol.match(/^([A-Z]+)\.CRYPTO$/);
+    if (cryptoMatch) {
+      try {
+        const res = await fetch(`https://api.coinbase.com/v2/prices/${cryptoMatch[1]}-USD/spot`, {
+          headers: { accept: "application/json" },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { data?: { amount?: string } };
+          const price = Number(data.data?.amount);
+          if (Number.isFinite(price)) {
+            return {
+              symbol: upperSymbol,
+              price,
+              name: `${cryptoMatch[1]} USD`,
+              asOf: new Date().toISOString(),
+              error: null,
+            };
+          }
+        }
+      } catch {
+        // Fall through to the original error.
+      }
+    }
+
     return {
       symbol: upperSymbol,
       price: null,

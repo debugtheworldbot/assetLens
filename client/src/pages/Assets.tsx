@@ -30,6 +30,27 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
+type AssetFilter = Category | 'all' | 'stock-cn' | 'stock-us' | 'stock-hk' | 'stock-etf';
+type ValueSort = 'none' | 'desc' | 'asc';
+
+const STOCK_FILTERS: { key: AssetFilter; label: string }[] = [
+  { key: 'stock-cn', label: 'A股' },
+  { key: 'stock-us', label: '美股' },
+  { key: 'stock-hk', label: '港股' },
+  { key: 'stock-etf', label: 'ETF' },
+];
+
+function matchesFilter(asset: Asset, filter: AssetFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'stock-cn') return asset.category === 'stock' && asset.market === 'CN';
+  if (filter === 'stock-us') return asset.category === 'stock' && asset.market === 'US';
+  if (filter === 'stock-hk') return asset.category === 'stock' && asset.market === 'HK';
+  if (filter === 'stock-etf') {
+    return asset.category === 'stock' && /etf/i.test(`${asset.name} ${asset.symbol}`);
+  }
+  return asset.category === filter;
+}
+
 export default function Assets() {
   const assets = useAssetStore((s) => s.assets);
   const settings = useAssetStore((s) => s.settings);
@@ -38,7 +59,8 @@ export default function Assets() {
   const priceCache = usePriceCache();
 
   const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState<Category | 'all'>('all');
+  const [filterCategory, setFilterCategory] = useState<AssetFilter>('all');
+  const [valueSort, setValueSort] = useState<ValueSort>('none');
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
@@ -46,17 +68,24 @@ export default function Assets() {
   const updateAssetTags = useAssetStore((s) => s.updateAssetTags);
 
   const filteredAssets = useMemo(() => {
-    return assets.filter((a) => {
-      if (filterCategory !== 'all' && a.category !== filterCategory) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        const nameMatch = a.name.toLowerCase().includes(q);
-        const symbolMatch = a.category === 'stock' && (a as StockAsset).symbol.toLowerCase().includes(q);
-        if (!nameMatch && !symbolMatch) return false;
-      }
-      return true;
+    const filtered = assets.filter((a) => {
+      if (!matchesFilter(a, filterCategory)) return false;
+      if (!search) return true;
+
+      const q = search.toLowerCase();
+      const nameMatch = a.name.toLowerCase().includes(q);
+      const symbolMatch = a.category === 'stock' && (a as StockAsset).symbol.toLowerCase().includes(q);
+      return nameMatch || symbolMatch;
     });
-  }, [assets, filterCategory, search]);
+
+    if (valueSort === 'none') return filtered;
+
+    return [...filtered].sort((a, b) => {
+      const valueA = getAssetValueInBaseCurrency(a, settings.baseCurrency, rates, priceCache);
+      const valueB = getAssetValueInBaseCurrency(b, settings.baseCurrency, rates, priceCache);
+      return valueSort === 'desc' ? valueB - valueA : valueA - valueB;
+    });
+  }, [assets, filterCategory, priceCache, rates, search, settings.baseCurrency, valueSort]);
 
   const categorySummaries = getCategorySummaries(assets, settings.baseCurrency, rates, priceCache);
   const stockColorMap = useMemo(() => assignStockColors(assets), [assets]);
@@ -108,8 +137,8 @@ export default function Assets() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="space-y-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
@@ -138,6 +167,33 @@ export default function Assets() {
               {cat.label}
             </Button>
           ))}
+          {STOCK_FILTERS.map((filter) => (
+            <Button
+              key={filter.key}
+              variant={filterCategory === filter.key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterCategory(filter.key)}
+              className="whitespace-nowrap"
+            >
+              {filter.label}
+            </Button>
+          ))}
+          <Button
+            variant={valueSort === 'desc' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setValueSort(valueSort === 'desc' ? 'none' : 'desc')}
+            className="whitespace-nowrap"
+          >
+            金额↓
+          </Button>
+          <Button
+            variant={valueSort === 'asc' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setValueSort(valueSort === 'asc' ? 'none' : 'asc')}
+            className="whitespace-nowrap"
+          >
+            金额↑
+          </Button>
         </div>
       </div>
 
